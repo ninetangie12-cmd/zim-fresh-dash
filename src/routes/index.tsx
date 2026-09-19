@@ -4,6 +4,7 @@ import { ArrowRight, Clock, FileText, MapPin, RotateCcw, Sparkles } from "lucide
 import { IndependentNotice } from "@/components/site/Disclaimer";
 import { CategoryRail } from "@/components/site/CategoryRail";
 import { FreshPicksSection } from "@/components/site/FreshPicksSection";
+import { PremiumMeatsSection } from "@/components/site/PremiumMeatsSection";
 import { HomeHero } from "@/components/site/HomeHero";
 import { ProductGrid } from "@/components/site/ProductCard";
 import { Section } from "@/components/site/Page";
@@ -67,6 +68,10 @@ function Home() {
 
       <div className="mt-8 md:mt-10">
         <FreshPicksSection />
+      </div>
+
+      <div className="mt-8 md:mt-10">
+        <PremiumMeatsSection />
       </div>
 
       <Section title="Shop by category"><CategoryRail /></Section>

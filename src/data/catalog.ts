@@ -13,6 +13,11 @@ import productSweetPotatoes from "@/assets/product-sweet-potatoes.jpg";
 import productSpinach from "@/assets/product-spinach.jpg";
 import productMilk from "@/assets/product-milk.jpg";
 import productSourdough from "@/assets/product-sourdough.jpg";
+import productBeefStewing from "@/assets/beef_stewing_cuts.jpg";
+import productChickenMixed from "@/assets/chicken_mixed_portions.jpg";
+import productBeefBoerewors from "@/assets/beef_boerewors.jpg";
+import productPorkChops from "@/assets/pork_chops.jpg";
+import productRussianSausages from "@/assets/russian_sausages.jpg";
 
 export type StockStatus =
   | "in_stock"
@@ -525,11 +530,11 @@ export const products: Product[] = [
   p({ id: "fp-08", slug: "carrots", name: "Carrots", description: "Fresh carrots, sold by weight.", packSize: "per kg", price: 1.25, category: "fresh-produce", storeIds: ["tm-pnp", "daily-greens", "shop-for-me"], stock: "in_stock", weighted: true, pricePerKg: 1.25, estimatedKg: 1 }),
 
   // Meat & butchery
-  p({ id: "mb-01", slug: "beef-stewing", name: "Beef Stewing Cuts", description: "Bone-in stewing beef from the butchery counter.", packSize: "per kg", price: 6.5, category: "meat-butchery", storeIds: ["tm-pnp", "fresh-meat-market"], stock: "in_stock", popular: true, weighted: true, pricePerKg: 6.5, estimatedKg: 1, synonyms: ["nyama yemombe"] }),
-  p({ id: "mb-02", slug: "chicken-mixed-portions", name: "Chicken Mixed Portions", description: "Frozen mixed chicken portions.", packSize: "2 kg", price: 7.2, category: "meat-butchery", storeIds: ["tm-pnp", "fresh-meat-market", "shop-for-me"], stock: "in_stock", popular: true, synonyms: ["huku"] }),
-  p({ id: "mb-03", slug: "boerewors", name: "Beef Boerewors", description: "Seasoned beef sausage for the braai.", packSize: "per kg", price: 5.9, category: "meat-butchery", storeIds: ["tm-pnp", "fresh-meat-market"], stock: "low_stock", weighted: true, pricePerKg: 5.9, estimatedKg: 1 }),
-  p({ id: "mb-04", slug: "pork-chops", name: "Pork Chops", description: "Cut to order at the counter.", packSize: "per kg", price: 6.1, category: "meat-butchery", storeIds: ["tm-pnp", "fresh-meat-market"], stock: "in_stock", weighted: true, pricePerKg: 6.1, estimatedKg: 1 }),
-  p({ id: "mb-05", slug: "russians", name: "Russian Sausages", description: "Ready to grill or fry.", packSize: "500 g", price: 3.2, category: "meat-butchery", storeIds: ["tm-pnp", "fresh-meat-market"], stock: "out_of_stock" }),
+  p({ id: "mb-01", slug: "beef-stewing", name: "Beef Stewing Cuts", description: "Bone-in stewing beef from the butchery counter.", packSize: "per kg", price: 6.5, category: "meat-butchery", storeIds: ["tm-pnp", "fresh-meat-market"], stock: "in_stock", popular: true, weighted: true, pricePerKg: 6.5, estimatedKg: 1, synonyms: ["nyama yemombe"], image: productBeefStewing }),
+  p({ id: "mb-02", slug: "chicken-mixed-portions", name: "Chicken Mixed Portions", description: "Frozen mixed chicken portions.", packSize: "2 kg", price: 7.2, category: "meat-butchery", storeIds: ["tm-pnp", "fresh-meat-market", "shop-for-me"], stock: "in_stock", popular: true, synonyms: ["huku"], image: productChickenMixed }),
+  p({ id: "mb-03", slug: "boerewors", name: "Beef Boerewors", description: "Seasoned beef sausage for the braai.", packSize: "per kg", price: 5.9, category: "meat-butchery", storeIds: ["tm-pnp", "fresh-meat-market"], stock: "low_stock", weighted: true, pricePerKg: 5.9, estimatedKg: 1, image: productBeefBoerewors }),
+  p({ id: "mb-04", slug: "pork-chops", name: "Pork Chops", description: "Cut to order at the counter.", packSize: "per kg", price: 6.1, category: "meat-butchery", storeIds: ["tm-pnp", "fresh-meat-market"], stock: "in_stock", weighted: true, pricePerKg: 6.1, estimatedKg: 1, image: productPorkChops }),
+  p({ id: "mb-05", slug: "russians", name: "Russian Sausages", description: "Ready to grill or fry.", packSize: "500 g", price: 3.2, category: "meat-butchery", storeIds: ["tm-pnp", "fresh-meat-market"], stock: "out_of_stock", image: productRussianSausages }),
 
   // Bakery
   p({ id: "bk-01", slug: "white-bread", name: "White Bread Loaf", description: "Standard sliced white loaf.", packSize: "700 g", price: 1.1, category: "bakery", storeIds: ["tm-pnp", "supermarket-express", "avondale-bakehouse", "shop-for-me"], stock: "in_stock", popular: true, synonyms: ["chingwa"] }),
@@ -643,6 +648,7 @@ export const productBySlug = (slug: string) => products.find((x) => x.slug === s
 export const promotionProducts = () => products.filter((x) => x.promoLabel);
 export const popularProducts = () => products.filter((x) => x.popular);
 export const freshPicksProducts = () => products.filter((x) => x.freshPick);
+export const premiumMeatsProducts = () => products.filter((x) => x.category === "meat-butchery").slice(0, 10);
 
 export const isAvailable = (s: StockStatus) => s === "in_stock" || s === "low_stock";
 
