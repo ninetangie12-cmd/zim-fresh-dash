@@ -1,5 +1,4 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { Link, createFileRoute, Navigate } from "@tanstack/react-router";
 
 import { Page } from "@/components/site/Page";
 import { ProductGrid } from "@/components/site/ProductCard";
@@ -23,55 +22,10 @@ export const Route = createFileRoute("/liquor")({
 });
 
 function Liquor() {
-  const { state, verifyAge } = useApp();
-  const [dob, setDob] = useState("");
-  const [acknowledged, setAcknowledged] = useState(false);
-  const [error, setError] = useState("");
+  const { user } = useApp();
 
-  if (!state.ageVerified) {
-    return (
-      <Page title="Age verification" intro="You must be 18 or older to purchase alcohol.">
-        <form
-          className="rounded-lg border border-border bg-card p-5"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!dob) return setError("Please enter your date of birth.");
-            const age = (Date.now() - new Date(dob).getTime()) / (365.25 * 24 * 3600 * 1000);
-            if (age < 18) return setError("You must be 18 or older to enter this section.");
-            if (!acknowledged) return setError("Please confirm you are 18 or older.");
-            setError("");
-            verifyAge();
-          }}
-        >
-          <label htmlFor="dob" className="text-sm font-semibold text-slate">Date of birth</label>
-          <input
-            id="dob"
-            type="date"
-            value={dob}
-            onChange={(e) => setDob(e.target.value)}
-            className="mt-2 w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-          />
-
-          <label className="mt-4 flex items-start gap-2 text-sm text-slate-secondary">
-            <input type="checkbox" checked={acknowledged} onChange={(e) => setAcknowledged(e.target.checked)} className="mt-1" />
-            I confirm I am 18 or older and I will show identification on delivery.
-          </label>
-
-          {error ? <p className="mt-3 rounded-md bg-error-bg px-3 py-2 text-sm text-error">{error}</p> : null}
-
-          <button type="submit" className="mt-4 w-full rounded-md bg-coral py-2.5 text-sm font-semibold text-white hover:bg-coral-hover">
-            Enter the liquor section
-          </button>
-
-          <ul className="mt-4 space-y-1 text-xs text-slate-muted">
-            <li>Identification is checked at the door. Riders may refuse delivery.</li>
-            <li>Alcohol is never left unattended, at a gate or with a minor.</li>
-            <li>Delivery hours for alcohol are restricted by licence conditions.</li>
-            <li>Please drink responsibly.</li>
-          </ul>
-        </form>
-      </Page>
-    );
+  if (!user) {
+    return <Navigate to="/auth" />;
   }
 
   return (
