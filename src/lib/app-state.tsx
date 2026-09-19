@@ -112,8 +112,16 @@ type Ctx = {
   isAuthModalOpen: boolean;
   openAuthModal: (pendingAction?: () => void) => void;
   closeAuthModal: () => void;
+  isCartOpen: boolean;
+  openCart: () => void;
+  closeCart: () => void;
+  toggleCart: () => void;
   simulateSignIn: (identifier: string, name?: string) => void;
-  addToCart: (productId: string, storeId: string, quantity?: number) => void;
+  loginWithToken: (
+    user: { id: string; phone_number: string; full_name?: string | null; role: "customer" | "admin" },
+    token: string,
+  ) => Promise<void>;
+  addToCart: (productId: string, storeId: string, quantity?: number, options?: { openDrawer?: boolean }) => void;
   setQuantity: (productId: string, quantity: number) => void;
   removeFromCart: (productId: string) => void;
   clearCart: () => void;
@@ -128,10 +136,16 @@ type Ctx = {
   verifyAge: () => void;
   placeOrder: (o: PlaceOrderInput) => Promise<Order>;
   markProof: (orderId: string, file?: File) => Promise<void>;
+  updateOrder: (orderId: string, patch: Partial<Order>) => void;
+  refreshOrder: (codeOrId: string) => Promise<Order | null>;
   totals: {
     itemCount: number;
     subtotal: number;
     deliveryFee: number;
+    baseDeliveryFee?: number;
+    isFreeDelivery?: boolean;
+    freeDeliveryThreshold?: number;
+    amountToFreeDelivery?: number;
     serviceFee: number;
     savings: number;
     total: number;
@@ -165,6 +179,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [accountReady, setAccountReady] = useState(false);
   const loadedFor = useRef<string | null>(null);
 
+  const update = useCallback((fn: (s: State) => State) => setState((s) => fn(s)), []);
+
   // Auth intercept modal state
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const pendingAuthAction = useRef<(() => void) | null>(null);
@@ -178,6 +194,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setIsAuthModalOpen(false);
     pendingAuthAction.current = null;
   }, []);
+
+  // Cart drawer state
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const openCart = useCallback(() => setIsCartOpen(true), []);
+  const closeCart = useCallback(() => setIsCartOpen(false), []);
+  const toggleCart = useCallback(() => setIsCartOpen((prev) => !prev), []);
 
   const simulateSignIn = useCallback((identifier: string, name?: string) => {
     const isEmail = identifier.includes("@");
@@ -206,6 +228,63 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const loginWithToken = useCallback<Ctx["loginWithToken"]>(
+    async (serviceUser, token) => {
+      const nextUser: SignedInUser = {
+        id: serviceUser.id,
+        email: serviceUser.phone_number,
+        name: serviceUser.full_name || `Customer (${serviceUser.phone_number.slice(-4)})`,
+        avatarUrl: null,
+      };
+      setUser(nextUser);
+      try {
+        localStorage.setItem("tenganow.auth_token", token);
+        localStorage.setItem("tenganow.simulated_user", JSON.stringify(nextUser));
+      } catch {}
+      setIsAuthModalOpen(false);
+
+      // Fetch user addresses from backend service
+      try {
+        const res = await fetch("/api/user/addresses", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (data.success && Array.isArray(data.addresses) && data.addresses.length > 0) {
+          const fetchedAddresses: Address[] = data.addresses.map((a: any) => ({
+            id: a.id,
+            label: (a.suburb || "Saved Address") as "Home" | "Work" | "Other",
+            line: a.street_address,
+            landmark: a.landmarks || undefined,
+            zoneId: "avondale",
+          }));
+          update((s) => {
+            const existingIds = new Set(s.addresses.map((addr) => addr.id));
+            const newOnes = fetchedAddresses.filter((addr) => !existingIds.has(addr.id));
+            const merged = [...s.addresses, ...newOnes];
+            return {
+              ...s,
+              addresses: merged,
+              activeAddressId: s.activeAddressId || merged[0]?.id || null,
+            };
+          });
+        }
+      } catch (err) {
+        console.warn("Failed to fetch user addresses after login:", err);
+      }
+
+      if (pendingAuthAction.current) {
+        const action = pendingAuthAction.current;
+        pendingAuthAction.current = null;
+        try {
+          action();
+        } catch (err) {
+          console.error("Error executing pending auth action:", err);
+        }
+      }
+    },
+    [update],
+  );
+
   // Persist the basket and preferences so nothing is lost on refresh,
   // reconnect or a return visit on the same device.
   useEffect(() => {
@@ -217,11 +296,35 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         const parsed = JSON.parse(savedUser);
         if (parsed?.id) setUser(parsed);
       }
+      const token = localStorage.getItem("tenganow.auth_token");
+      if (token) {
+        fetch("/api/user/addresses", {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+          .then((r) => r.json())
+          .then((data) => {
+            if (data.success && Array.isArray(data.addresses) && data.addresses.length > 0) {
+              const fetchedAddresses: Address[] = data.addresses.map((a: any) => ({
+                id: a.id,
+                label: (a.suburb || "Saved Address") as "Home" | "Work" | "Other",
+                line: a.street_address,
+                landmark: a.landmarks || undefined,
+                zoneId: "avondale",
+              }));
+              update((s) => {
+                const existingIds = new Set(s.addresses.map((addr) => addr.id));
+                const newOnes = fetchedAddresses.filter((addr) => !existingIds.has(addr.id));
+                return { ...s, addresses: [...s.addresses, ...newOnes] };
+              });
+            }
+          })
+          .catch(() => {});
+      }
     } catch {
       /* corrupted storage — start fresh */
     }
     setHydrated(true);
-  }, []);
+  }, [update]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -231,8 +334,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       /* storage full or blocked */
     }
   }, [state, hydrated]);
-
-  const update = useCallback((fn: (s: State) => State) => setState((s) => fn(s)), []);
 
   /* ------------------------------ account sync ----------------------------- */
 
@@ -359,6 +460,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     try {
       localStorage.removeItem("tenganow.simulated_user");
+      localStorage.removeItem("tenganow.auth_token");
     } catch {}
     await supabase.auth.signOut().catch(() => undefined);
     setUser(null);
@@ -373,7 +475,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   /* -------------------------------- basket -------------------------------- */
 
   const addToCart = useCallback(
-    (productId: string, storeId: string, quantity = 1) =>
+    (productId: string, storeId: string, quantity = 1, options?: { openDrawer?: boolean }) => {
+      const isFirstItem = stateRef.current.cart.length === 0;
       update((s) => {
         const existing = s.cart.find((i) => i.productId === productId);
         if (existing) {
@@ -388,7 +491,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           ...s,
           cart: [...s.cart, { productId, storeId, quantity, substitution: s.defaultSubstitution }],
         };
-      }),
+      });
+      if (options?.openDrawer ?? isFirstItem) {
+        setIsCartOpen(true);
+      }
+    },
     [update],
   );
 
@@ -438,7 +545,30 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const addAddress = useCallback<Ctx["addAddress"]>(
     async (a) => {
       let id = `a${Date.now()}`;
-      if (user) {
+      const token = typeof window !== "undefined" ? localStorage.getItem("tenganow.auth_token") : null;
+      if (token) {
+        try {
+          const res = await fetch("/api/user/addresses", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              suburb: a.label || "Harare",
+              street_address: a.line,
+              landmarks: a.landmark || null,
+              is_default: true,
+            }),
+          });
+          const data = await res.json();
+          if (data.success && data.address?.id) {
+            id = data.address.id;
+          }
+        } catch (err) {
+          console.warn("Could not save address to API service:", err);
+        }
+      } else if (user) {
         try {
           id = await cloud.saveAddress(user.id, { ...a, id });
         } catch {
@@ -523,21 +653,36 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     async (o) => {
       const address =
         stateRef.current.addresses.find((a) => a.id === o.addressId) ?? stateRef.current.addresses[0];
+      const now = new Date().toISOString();
       const order: Order = {
         items: o.items,
         addressId: o.addressId,
         slotId: o.slotId,
         paymentMethod: o.paymentMethod,
+        paymentStatus: o.paymentMethod === "cod" ? "on_delivery" : "awaiting",
         status: o.status,
         total: o.total,
         deliveryFee: o.deliveryFee,
         ...(o.hidePrices ? { hidePrices: true } : {}),
         ...(o.recipientName ? { recipientName: o.recipientName } : {}),
         ...(o.recipientPhone ? { recipientPhone: o.recipientPhone } : {}),
-        ...(address ? { addressLine: address.line, addressZoneId: address.zoneId } : {}),
+        ...(address
+          ? {
+              addressLine: address.line,
+              addressZoneId: address.zoneId,
+              ...(address.landmark ? { addressLandmark: address.landmark } : {}),
+            }
+          : {}),
         id: `TN-${Math.floor(10000 + Math.random() * 89999)}`,
-        placedAt: new Date().toISOString(),
+        placedAt: now,
         pin: String(Math.floor(1000 + Math.random() * 8999)),
+        statusHistory: [
+          {
+            status: o.status,
+            note: "Order placed by customer",
+            createdAt: now,
+          },
+        ],
       };
 
       if (user && address) {
@@ -562,7 +707,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
             savings: totalsNow.savings,
             total: o.total,
           });
-        } catch {
+        } catch (err) {
+          console.warn("Could not save order to cloud:", err);
           /* keep the order visible locally even if the save failed */
         }
       }
@@ -575,18 +721,72 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const markProof = useCallback<Ctx["markProof"]>(
     async (orderId, file) => {
-      const order = stateRef.current.orders.find((o) => o.id === orderId);
+      const order = stateRef.current.orders.find((o) => o.id === orderId || o.dbId === orderId);
+      const now = new Date().toISOString();
       if (user && order?.dbId && file) {
-        await cloud.uploadPaymentProof(user.id, order.dbId, file);
+        try {
+          await cloud.uploadPaymentProof(user.id, order.dbId, file);
+        } catch (err) {
+          console.warn("Could not upload payment proof to cloud:", err);
+        }
       }
       update((s) => ({
         ...s,
         orders: s.orders.map((o) =>
-          o.id === orderId ? { ...o, proofUploaded: true, status: "Payment submitted" } : o,
+          o.id === orderId || o.dbId === orderId
+            ? {
+                ...o,
+                proofUploaded: true,
+                status: "Payment submitted",
+                paymentStatus: "submitted",
+                statusHistory: [
+                  ...(o.statusHistory ?? []),
+                  {
+                    status: "Payment submitted",
+                    note: "Proof of payment uploaded",
+                    createdAt: now,
+                  },
+                ],
+              }
+            : o,
         ),
       }));
     },
     [update, user],
+  );
+
+  const updateOrder = useCallback(
+    (orderId: string, patch: Partial<Order>) => {
+      update((s) => ({
+        ...s,
+        orders: s.orders.map((o) => (o.id === orderId || o.dbId === orderId ? { ...o, ...patch } : o)),
+      }));
+    },
+    [update],
+  );
+
+  const refreshOrder = useCallback(
+    async (codeOrId: string) => {
+      try {
+        const order = await cloud.fetchOrderByCodeOrId(codeOrId);
+        if (order) {
+          update((s) => {
+            const exists = s.orders.some((o) => o.id === order.id || o.dbId === order.dbId);
+            return {
+              ...s,
+              orders: exists
+                ? s.orders.map((o) => (o.id === order.id || o.dbId === order.dbId ? { ...o, ...order } : o))
+                : [order, ...s.orders],
+            };
+          });
+          return order;
+        }
+      } catch (err) {
+        console.warn("Could not refresh order:", err);
+      }
+      return null;
+    },
+    [update],
   );
 
   /* -------------------------------- derived -------------------------------- */
@@ -604,7 +804,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     isAuthModalOpen,
     openAuthModal,
     closeAuthModal,
+    isCartOpen,
+    openCart,
+    closeCart,
+    toggleCart,
     simulateSignIn,
+    loginWithToken,
     addToCart,
     setQuantity,
     removeFromCart,
@@ -620,6 +825,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     verifyAge,
     placeOrder,
     markProof,
+    updateOrder,
+    refreshOrder,
     totals,
     activeAddress,
   };
@@ -641,12 +848,19 @@ function computeTotals(cart: CartItem[], address: Address | null | undefined) {
   const storeCount = new Set(cart.map((i) => i.storeId)).size;
   const zone = address ? zoneById(address.zoneId) : undefined;
   const baseFee = zone?.deliveryFee ?? 3.5;
-  const deliveryFee = cart.length ? baseFee * Math.max(storeCount, 1) : 0;
+  const FREE_DELIVERY_THRESHOLD = 25;
+  const isFreeDelivery = subtotal >= FREE_DELIVERY_THRESHOLD;
+  const baseDeliveryFee = cart.length ? baseFee * Math.max(storeCount, 1) : 0;
+  const deliveryFee = isFreeDelivery ? 0 : baseDeliveryFee;
   const serviceFee = cart.length ? SERVICE_FEE : 0;
   return {
     itemCount,
     subtotal,
     deliveryFee,
+    baseDeliveryFee,
+    isFreeDelivery,
+    freeDeliveryThreshold: FREE_DELIVERY_THRESHOLD,
+    amountToFreeDelivery: Math.max(0, FREE_DELIVERY_THRESHOLD - subtotal),
     serviceFee,
     savings,
     total: subtotal + deliveryFee + serviceFee,

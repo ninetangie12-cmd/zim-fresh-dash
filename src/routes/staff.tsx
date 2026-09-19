@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { brand } from "@/config/brand";
+import { DEFAULT_STAFF } from "@/lib/admin";
 import { useApp } from "@/lib/app-state";
 import { claimStaffCode, myStaffRecord, setMyAvailability } from "@/lib/staff";
 
@@ -28,85 +29,63 @@ function StaffLayout() {
   const qc = useQueryClient();
   const [code, setCode] = useState("");
   const [claiming, setClaiming] = useState(false);
+  const [demoStaffId, setDemoStaffId] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("tenganow.activeStaff") || "staff-farai-01";
+    }
+    return "staff-farai-01";
+  });
 
-  const { data: staff, isLoading } = useQuery({
+  const { data: realStaff, isLoading } = useQuery({
     queryKey: ["staff", "me", user?.id],
     queryFn: () => myStaffRecord(user!.id),
     enabled: Boolean(user),
   });
+
+  const staff = realStaff || DEFAULT_STAFF.find((s) => s.id === demoStaffId) || DEFAULT_STAFF[0];
+
+  const setDemoStaff = (id: string) => {
+    setDemoStaffId(id);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("tenganow.activeStaff", id);
+    }
+    void qc.invalidateQueries({ queryKey: ["staff"] });
+  };
 
   if (!hydrated || (user && isLoading))
     return (
       <div className="mx-auto max-w-lg px-4 py-10 text-sm text-slate-secondary">Loading…</div>
     );
 
-  if (!user)
-    return (
-      <div className="mx-auto max-w-lg px-4 py-12 text-center">
-        <h1 className="type-page text-slate">Shopper and rider app</h1>
-        <p className="mt-2 text-sm text-slate-secondary">
-          Sign in with your own account, then enter the join code your manager gave you.
-        </p>
-        <Link
-          to="/auth"
-          className="mt-5 inline-block rounded-md bg-coral px-4 py-2 text-sm font-semibold text-white hover:bg-coral-hover"
-        >
-          Sign in
-        </Link>
-      </div>
-    );
-
-  if (!staff)
-    return (
-      <div className="mx-auto max-w-md px-4 py-12">
-        <h1 className="type-page text-slate">Join your team</h1>
-        <p className="mt-2 text-sm text-slate-secondary">
-          Enter the join code your manager gave you. You only do this once on this account.
-        </p>
-        <form
-          className="mt-5 space-y-3"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            setClaiming(true);
-            try {
-              const ok = await claimStaffCode(code);
-              if (ok) {
-                toast.success("You're linked. Your jobs will appear here.");
-                await qc.invalidateQueries({ queryKey: ["staff"] });
-              } else {
-                toast.error("That code isn't valid or has already been used.");
-              }
-            } catch {
-              toast.error("We couldn't check that code. Try again.");
-            } finally {
-              setClaiming(false);
-            }
-          }}
-        >
-          <input
-            value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
-            placeholder="e.g. TN-SHOP-4821"
-            className="w-full rounded-md border border-border px-3 py-2.5 text-sm"
-            required
-          />
-          <button
-            type="submit"
-            disabled={claiming}
-            className="w-full rounded-md bg-coral py-2.5 text-sm font-semibold text-white hover:bg-coral-hover disabled:opacity-50"
-          >
-            Link my account
-          </button>
-        </form>
-      </div>
-    );
-
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-5">
+      {/* Dev / Demo Staff Switcher Bar */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50/70 p-2.5 text-xs text-amber-900">
+        <div className="flex items-center gap-1.5">
+          <span className="font-bold uppercase tracking-wider text-amber-800">Staff Mode:</span>
+          <span>Operating as <strong>{staff.name}</strong> ({staff.role.toUpperCase()})</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {DEFAULT_STAFF.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setDemoStaff(s.id)}
+              className={`rounded px-2 py-1 font-semibold transition-colors ${
+                staff.id === s.id
+                  ? "bg-amber-700 text-white shadow-xs"
+                  : "bg-amber-100/80 text-amber-900 hover:bg-amber-200"
+              }`}
+            >
+              {s.role === "shopper" ? "🛒 Shopper" : "🛵 Rider"}: {s.name.split(" ")[0]}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="type-section text-slate">
-            {staff.role === "rider" ? "Rider jobs" : "Picking jobs"}
+            {staff.role === "rider" ? "Rider Delivery App" : "Shopper Picking App"}
           </h1>
           <p className="text-sm text-slate-secondary">
             {staff.name}
@@ -130,9 +109,14 @@ function StaffLayout() {
         <Outlet />
       </div>
 
-      <Link to="/" className="mt-8 inline-block text-sm font-semibold text-botanical">
-        Back to the shop
-      </Link>
+      <div className="mt-8 flex flex-wrap items-center justify-between border-t border-border pt-4 text-xs text-slate-muted">
+        <Link to="/" className="font-semibold text-botanical hover:underline">
+          ← Back to the store
+        </Link>
+        <Link to="/admin/orders" className="font-semibold text-slate-secondary hover:underline">
+          Operations portal →
+        </Link>
+      </div>
     </div>
   );
 }

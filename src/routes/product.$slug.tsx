@@ -68,13 +68,13 @@ function ProductPage() {
       </nav>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="overflow-hidden rounded-2xl border border-border bg-neutral-50/50 p-6 flex items-center justify-center dark:bg-slate-900/40">
           <img
-            src={imageFor(product.category)}
+            src={product.image || imageFor(product.category)}
             alt={product.name}
             width={816}
             height={816}
-            className="aspect-square w-full object-cover"
+            className="aspect-square w-full max-h-96 object-contain object-center mix-blend-multiply"
           />
         </div>
 

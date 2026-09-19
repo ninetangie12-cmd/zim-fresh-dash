@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { formatUsd } from "@/config/brand";
@@ -15,6 +15,7 @@ import {
   proofUrl,
   saveAdminNote,
   setOrderStatus,
+  subscribeToAdminOrders,
   type AdminOrder,
 } from "@/lib/admin";
 import { useApp } from "@/lib/app-state";
@@ -45,9 +46,17 @@ function OrderDetail() {
   const { user } = useApp();
   const qc = useQueryClient();
 
+  useEffect(() => {
+    const unsub = subscribeToAdminOrders(() => {
+      void qc.invalidateQueries({ queryKey: ["admin"] });
+    });
+    return () => unsub();
+  }, [qc]);
+
   const { data: order, isLoading } = useQuery({
     queryKey: ["admin", "order", code],
     queryFn: () => getOrder(code),
+    refetchInterval: 15000,
   });
   const { data: staff } = useQuery({ queryKey: ["admin", "staff"], queryFn: listStaff });
   const { data: audit } = useQuery({

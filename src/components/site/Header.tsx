@@ -3,7 +3,6 @@ import { CircleHelp, MapPin, Moon, Search, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Wordmark } from "@/components/site/Wordmark";
-import { QuickBasket } from "@/components/site/QuickBasket";
 import { DeliveryLocationBar } from "@/components/site/DeliveryLocationBar";
 import { zoneById } from "@/data/catalog";
 import { useApp } from "@/lib/app-state";
@@ -62,7 +61,7 @@ function UserAvatar({
 }
 
 export function Header() {
-  const { totals, activeAddress, user, openAuthModal } = useApp();
+  const { totals, activeAddress, user, openAuthModal, openCart } = useApp();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [isDay, setIsDay] = useState(true);
@@ -257,22 +256,12 @@ export function Header() {
               <CircleHelp className="size-5" />
             </Link>
 
-            <div className="md:hidden">
-              <QuickBasket />
-            </div>
-
-            <Link
-              to="/basket"
-              onClick={(e) => {
-                if (!user) {
-                  e.preventDefault();
-                  openAuthModal(() => {
-                    navigate({ to: "/basket" });
-                  });
-                }
-              }}
+            {/* Mobile Cart Button -> Opens CartDrawer */}
+            <button
+              type="button"
+              onClick={openCart}
               aria-label={`Basket, ${totals.itemCount} items`}
-              className="relative hidden size-10 place-items-center rounded-full transition-colors hover:bg-primary-foreground/10 md:grid"
+              className="relative grid size-10 place-items-center rounded-full text-primary-foreground transition-colors hover:bg-primary-foreground/10 md:hidden cursor-pointer"
             >
               <QuickBasketIcon />
               {totals.itemCount > 0 ? (
@@ -280,7 +269,22 @@ export function Header() {
                   {totals.itemCount}
                 </span>
               ) : null}
-            </Link>
+            </button>
+
+            {/* Desktop Cart Button -> Opens CartDrawer */}
+            <button
+              type="button"
+              onClick={openCart}
+              aria-label={`Basket, ${totals.itemCount} items`}
+              className="relative hidden size-10 place-items-center rounded-full transition-colors hover:bg-primary-foreground/10 md:grid cursor-pointer"
+            >
+              <QuickBasketIcon />
+              {totals.itemCount > 0 ? (
+                <span className="absolute -top-0.5 -right-0.5 grid min-w-5 place-items-center rounded-full bg-coral px-1 text-xs font-bold tabular text-primary-foreground shadow-xs">
+                  {totals.itemCount}
+                </span>
+              ) : null}
+            </button>
           </div>
         </div>
       </div>

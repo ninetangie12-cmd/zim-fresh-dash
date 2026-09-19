@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, Heart, Leaf, Minus, Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -17,6 +17,10 @@ export function FreshProductCard({ product }: { product: Product }) {
 
   const fallbackImg = imageFor(product.category);
   const [imgSrc, setImgSrc] = useState(product.image || fallbackImg);
+
+  useEffect(() => {
+    setImgSrc(product.image || fallbackImg);
+  }, [product.image, fallbackImg]);
 
   const handleImageError = () => {
     if (imgSrc !== fallbackImg) {
@@ -59,19 +63,19 @@ export function FreshProductCard({ product }: { product: Product }) {
   };
 
   return (
-    <article className="group relative flex h-full flex-col rounded-2xl border border-border/80 bg-card p-3 shadow-xs transition-all duration-200 hover:-translate-y-1 hover:border-botanical/30 hover:shadow-lg">
+    <article className="group relative flex flex-col justify-between h-full rounded-2xl border border-border/80 bg-card p-3 shadow-xs transition-all duration-200 hover:-translate-y-1 hover:border-botanical/30 hover:shadow-lg">
       {/* Product Image & Badges Container */}
       <Link
         to="/product/$slug"
         params={{ slug: product.slug }}
-        className="relative mb-2.5 flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl bg-mist/40 transition-colors group-hover:bg-mist/70 dark:bg-slate-900/40"
+        className="relative w-full aspect-square flex items-center justify-center p-4 bg-neutral-50/50 rounded-2xl overflow-hidden dark:bg-slate-900/40"
       >
         <img
           src={imgSrc}
           alt={product.name}
           loading="lazy"
           onError={handleImageError}
-          className="size-full object-contain p-2.5 transition-transform duration-300 ease-out group-hover:scale-105"
+          className="w-full h-full max-h-36 object-contain object-center mix-blend-multiply transition-transform duration-300 group-hover:scale-105"
         />
 
         {/* Top-Left Floating Badge: Discount or Freshness */}
@@ -102,22 +106,24 @@ export function FreshProductCard({ product }: { product: Product }) {
         </button>
       </Link>
 
-      {/* Unit & Weight Micro-Text */}
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-muted">
-        {product.packSize}
-      </span>
+      {/* Product Information (Pack size and Title with uniform height constraint) */}
+      <div className="flex flex-1 flex-col justify-start my-2.5">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-muted">
+          {product.packSize}
+        </span>
 
-      {/* Product Title (1-2 line clamp) */}
-      <Link
-        to="/product/$slug"
-        params={{ slug: product.slug }}
-        className="mt-0.5 min-h-[2.5rem] font-heading text-sm font-bold leading-snug tracking-tight text-slate transition-colors line-clamp-2 group-hover:text-botanical"
-      >
-        {product.name}
-      </Link>
+        {/* Product Title (1-2 line clamp with consistent minimum height) */}
+        <Link
+          to="/product/$slug"
+          params={{ slug: product.slug }}
+          className="mt-0.5 min-h-[2.5rem] font-heading text-sm font-bold leading-snug tracking-tight text-slate transition-colors line-clamp-2 group-hover:text-botanical"
+        >
+          {product.name}
+        </Link>
+      </div>
 
       {/* Pricing & Interactive Add Stepper Row */}
-      <div className="mt-auto flex items-end justify-between gap-2 pt-2">
+      <div className="mt-auto flex items-end justify-between gap-2 pt-2 border-t border-border/40">
         {/* Price Column */}
         <div className="flex flex-col">
           <div className="flex items-baseline gap-1.5">
@@ -214,16 +220,16 @@ export function FreshPicksSection() {
       </div>
 
       {/* Mobile Horizontal Snap-Scrolling Carousel */}
-      <div className="flex gap-3.5 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-3 pt-1 -mx-4 px-4 md:hidden">
+      <div className="flex items-stretch gap-3.5 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-3 pt-1 -mx-4 px-4 md:hidden">
         {freshItems.map((product) => (
-          <div key={product.id} className="w-[185px] sm:w-[210px] shrink-0 snap-start">
+          <div key={product.id} className="w-[185px] sm:w-[210px] shrink-0 snap-start flex flex-col">
             <FreshProductCard product={product} />
           </div>
         ))}
       </div>
 
       {/* Desktop 4 to 5 Column Responsive Grid */}
-      <div className="hidden md:grid md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-4 lg:gap-5 pt-1">
+      <div className="hidden md:grid md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-4 lg:gap-5 pt-1 items-stretch">
         {freshItems.map((product) => (
           <FreshProductCard key={product.id} product={product} />
         ))}

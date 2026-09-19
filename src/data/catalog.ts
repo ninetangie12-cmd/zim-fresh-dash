@@ -5,6 +5,15 @@
  * All prices are ESTIMATES until a shopper confirms the shelf price.
  */
 
+import productTomatoes from "@/assets/product-tomatoes.jpg";
+import productApples from "@/assets/product-apples.jpg";
+import productAvocados from "@/assets/product-avocados.jpg";
+import productBananas from "@/assets/product-bananas.jpg";
+import productSweetPotatoes from "@/assets/product-sweet-potatoes.jpg";
+import productSpinach from "@/assets/product-spinach.jpg";
+import productMilk from "@/assets/product-milk.jpg";
+import productSourdough from "@/assets/product-sourdough.jpg";
+
 export type StockStatus =
   | "in_stock"
   | "low_stock"
@@ -420,7 +429,7 @@ export const products: Product[] = [
     freshPick: true,
     pricePerKg: 1.4,
     estimatedKg: 1,
-    image: "https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=600&q=80",
+    image: productTomatoes,
     synonyms: ["madomasi", "tomatoes"],
   }),
   p({
@@ -437,7 +446,7 @@ export const products: Product[] = [
     stock: "in_stock",
     popular: true,
     freshPick: true,
-    image: "https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&w=600&q=80",
+    image: productApples,
     synonyms: ["maapuro", "apples"],
   }),
   p({
@@ -454,7 +463,7 @@ export const products: Product[] = [
     stock: "in_stock",
     popular: true,
     freshPick: true,
-    image: "https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?auto=format&fit=crop&w=600&q=80",
+    image: productAvocados,
     synonyms: ["avocado", "mapfumha"],
   }),
   p({
@@ -473,7 +482,7 @@ export const products: Product[] = [
     freshPick: true,
     pricePerKg: 1.1,
     estimatedKg: 1,
-    image: "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?auto=format&fit=crop&w=600&q=80",
+    image: productBananas,
     synonyms: ["mabanana"],
   }),
   p({
@@ -490,7 +499,7 @@ export const products: Product[] = [
     stock: "in_stock",
     popular: true,
     freshPick: true,
-    image: "https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=600&q=80",
+    image: productSweetPotatoes,
     synonyms: ["mbambaira", "potatoes"],
   }),
   p({
@@ -506,7 +515,7 @@ export const products: Product[] = [
     stock: "in_stock",
     popular: true,
     freshPick: true,
-    image: "https://images.unsplash.com/photo-1576045057995-568f588f82fb?auto=format&fit=crop&w=600&q=80",
+    image: productSpinach,
     synonyms: ["muriwo", "spinach"],
   }),
   p({ id: "fp-02", slug: "onions", name: "Onions", description: "Brown onions, sold loose by weight.", packSize: "per kg", price: 1.2, category: "fresh-produce", storeIds: ["tm-pnp", "daily-greens", "shop-for-me"], stock: "in_stock", weighted: true, pricePerKg: 1.2, estimatedKg: 1, synonyms: ["hanyanisi"] }),
@@ -542,7 +551,7 @@ export const products: Product[] = [
     stock: "in_stock",
     popular: true,
     freshPick: true,
-    image: "https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=600&q=80",
+    image: productSourdough,
     synonyms: ["chingwa", "bread"],
   }),
 
@@ -560,7 +569,7 @@ export const products: Product[] = [
     stock: "in_stock",
     popular: true,
     freshPick: true,
-    image: "https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=600&q=80",
+    image: productMilk,
     synonyms: ["mukaka", "milk"],
   }),
   p({ id: "de-02", slug: "eggs-30", name: "Eggs", description: "Large eggs, tray of thirty.", packSize: "30 tray", price: 4.5, wasPrice: 5.2, promoLabel: "Save $0.70", category: "dairy-eggs", storeIds: ["tm-pnp", "supermarket-express"], stock: "in_stock", popular: true, synonyms: ["mazai"] }),

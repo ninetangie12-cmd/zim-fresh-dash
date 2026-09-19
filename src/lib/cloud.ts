@@ -62,6 +62,7 @@ type OrderRow = {
   hide_prices: boolean;
   delivery_fee: string | number;
   total: string | number;
+  final_total?: string | number | null;
   pin: string;
   placed_at: string;
   order_items?: Array<{
@@ -70,9 +71,15 @@ type OrderRow = {
     quantity: number;
     substitution: string;
   }> | null;
+  order_status_history?: Array<{
+    id?: string;
+    status: string;
+    note?: string | null;
+    created_at: string;
+  }> | null;
 };
 
-function rowToOrder(row: OrderRow): Order {
+export function rowToOrder(row: OrderRow): Order {
   return {
     id: row.code,
     dbId: row.id,
@@ -89,14 +96,24 @@ function rowToOrder(row: OrderRow): Order {
     ...(row.address_landmark ? { addressLandmark: row.address_landmark } : {}),
     slotId: row.slot_id,
     paymentMethod: row.payment_method,
+    paymentStatus: row.payment_status,
     status: row.status,
     total: Number(row.total),
     deliveryFee: Number(row.delivery_fee),
+    ...(row.final_total != null ? { finalTotal: Number(row.final_total) } : {}),
     pin: row.pin,
     hidePrices: row.hide_prices,
     proofUploaded: row.payment_status !== "awaiting",
     ...(row.recipient_name ? { recipientName: row.recipient_name } : {}),
     ...(row.recipient_phone ? { recipientPhone: row.recipient_phone } : {}),
+    statusHistory: (row.order_status_history ?? [])
+      .map((h) => ({
+        id: h.id,
+        status: h.status,
+        note: h.note ?? null,
+        createdAt: h.created_at,
+      }))
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
   };
 }
 
@@ -263,4 +280,75 @@ export async function saveShoppingListRequest(
     instructions: input.instructions ?? null,
     image_path: input.imagePath ?? null,
   });
+}
+
+/** Fetches a full order with its items and status history by order code or database UUID. */
+export async function fetchOrderByCodeOrId(codeOrId: string): Promise<Order | null> {
+  const clean = codeOrId.trim();
+  if (!clean) return null;
+
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean);
+  const query = supabase
+    .from("orders")
+    .select("*, order_items(*), order_status_history(*)");
+
+  const { data, error } = await (isUuid ? query.eq("id", clean) : query.eq("code", clean)).maybeSingle();
+
+  if (error || !data) return null;
+  return rowToOrder(data as OrderRow);
+}
+
+/** Subscribes to real-time changes on an order and its status history entries. */
+export function subscribeToOrder(
+  orderDbId: string,
+  callbacks: {
+    onOrderUpdate?: (payload: Partial<Order>) => void;
+    onHistoryInsert?: (entry: { id?: string; status: string; note: string | null; createdAt: string }) => void;
+  },
+) {
+  if (!orderDbId) return () => {};
+
+  const channel = supabase
+    .channel(`order_live_${orderDbId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "orders",
+        filter: `id=eq.${orderDbId}`,
+      },
+      (payload) => {
+        const row = payload.new as OrderRow;
+        callbacks.onOrderUpdate?.({
+          status: row.status,
+          paymentStatus: row.payment_status,
+          proofUploaded: row.payment_status !== "awaiting",
+          finalTotal: row.final_total != null ? Number(row.final_total) : undefined,
+        });
+      },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "order_status_history",
+        filter: `order_id=eq.${orderDbId}`,
+      },
+      (payload) => {
+        const row = payload.new as { id?: string; status: string; note?: string | null; created_at: string };
+        callbacks.onHistoryInsert?.({
+          id: row.id,
+          status: row.status,
+          note: row.note ?? null,
+          createdAt: row.created_at,
+        });
+      },
+    )
+    .subscribe();
+
+  return () => {
+    void supabase.removeChannel(channel);
+  };
 }

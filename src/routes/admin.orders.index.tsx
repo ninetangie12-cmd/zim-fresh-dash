@@ -1,10 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { formatUsd } from "@/config/brand";
 import { paymentMethods } from "@/data/catalog";
-import { listOrders } from "@/lib/admin";
+import { listOrders, subscribeToAdminOrders } from "@/lib/admin";
 
 export const Route = createFileRoute("/admin/orders/")({
   head: () => ({ meta: [
@@ -26,11 +26,21 @@ const filters = [
 ] as const;
 
 function OrdersList() {
+  const qc = useQueryClient();
   const [filter, setFilter] = useState<(typeof filters)[number]["id"]>("all");
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    const unsub = subscribeToAdminOrders(() => {
+      void qc.invalidateQueries({ queryKey: ["admin"] });
+    });
+    return () => unsub();
+  }, [qc]);
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "orders"],
     queryFn: listOrders,
+    refetchInterval: 15000,
   });
 
   if (isLoading) return <p className="text-sm text-slate-secondary">Loading orders…</p>;

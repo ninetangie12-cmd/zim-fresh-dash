@@ -18,6 +18,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { brand } from "@/config/brand";
 import { AppStateProvider } from "@/lib/app-state";
 import { AuthModal } from "@/components/site/AuthModal";
+import { CartDrawer } from "@/components/site/CartDrawer";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
@@ -143,6 +144,7 @@ function RootComponent() {
           <WhatsAppButton />
           <Toaster position="top-center" />
           <AuthModal />
+          <CartDrawer />
         </div>
       </AppStateProvider>
     </QueryClientProvider>

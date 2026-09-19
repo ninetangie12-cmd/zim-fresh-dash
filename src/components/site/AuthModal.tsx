@@ -20,7 +20,7 @@ const DISMISS_KEY = "tenganow.auth_modal_dismissed";
 const DISMISS_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export function AuthModal() {
-  const { user, isAuthModalOpen, openAuthModal, closeAuthModal, simulateSignIn } = useApp();
+  const { user, isAuthModalOpen, openAuthModal, closeAuthModal, simulateSignIn, loginWithToken } = useApp();
   
   // Two-step flow: "phone" (or email) -> "otp"
   const [step, setStep] = useState<"phone" | "otp">("phone");
@@ -33,6 +33,7 @@ export function AuthModal() {
   // OTP State
   const [otp, setOtp] = useState<string[]>(["", "", "", ""]);
   const [countdown, setCountdown] = useState<number>(30);
+  const [isSendingOtp, setIsSendingOtp] = useState<boolean>(false);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const [isVerified, setIsVerified] = useState<boolean>(false);
   const otpInputs = useRef<(HTMLInputElement | null)[]>([]);
@@ -95,53 +96,99 @@ export function AuthModal() {
     closeAuthModal();
   };
 
-  // Step 1: Phone or Email Submission
-  const handleStep1Submit = (e: React.FormEvent) => {
+  // Step 1: Phone or Email Submission -> POST /api/auth/send-otp
+  const handleStep1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    let targetIdentifier = "";
     if (mode === "phone") {
       const cleaned = phoneNumber.replace(/\s+/g, "");
       if (!cleaned || cleaned.length < 7) {
         toast.error("Please enter a valid mobile phone number (e.g. 77 123 4567)");
         return;
       }
-      const formatted = cleaned.startsWith("0") ? `+263 ${cleaned.slice(1)}` : `+263 ${cleaned}`;
-      setFormattedPhone(formatted);
-      setStep("otp");
-      setCountdown(30);
-      toast.info("SMS code sent! Use demo code 4821");
+      targetIdentifier = cleaned.startsWith("0") ? `+263 ${cleaned.slice(1)}` : `+263 ${cleaned}`;
     } else {
       if (!emailAddress.includes("@") || !emailAddress.includes(".")) {
         toast.error("Please enter a valid email address");
         return;
       }
-      setFormattedPhone(emailAddress.trim());
+      targetIdentifier = emailAddress.trim();
+    }
+
+    setFormattedPhone(targetIdentifier);
+    setIsSendingOtp(true);
+
+    try {
+      const res = await fetch("/api/auth/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phoneNumber: targetIdentifier,
+          fullName: fullName.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        toast.error(data.error || "Failed to send verification code. Please try again.");
+        return;
+      }
+
       setStep("otp");
       setCountdown(30);
-      toast.info("Verification code sent! Use demo code 4821");
+      toast.success(`Verification code sent to ${targetIdentifier}`);
+      if (data.debugCode) {
+        toast.info(`Test code: ${data.debugCode}`);
+      }
+    } catch (err) {
+      console.error("send-otp error:", err);
+      toast.error("Could not reach authentication service. Please check your connection.");
+    } finally {
+      setIsSendingOtp(false);
     }
   };
 
-  // Trigger Verification (either automatically on 4th digit or button click)
-  const handleVerifyOtp = (digits: string[]) => {
+  // Step 2: Trigger Verification -> POST /api/auth/verify-otp
+  const handleVerifyOtp = async (digits: string[]) => {
     const fullCode = digits.join("");
     if (fullCode.length < 4 || isVerifying || isVerified) return;
 
     setIsVerifying(true);
 
-    // Simulate verification delay & green checkmark animation
-    setTimeout(() => {
+    try {
+      const res = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phoneNumber: formattedPhone,
+          code: fullCode,
+          fullName: fullName.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        toast.error(data.error || "Invalid or expired verification code.");
+        setIsVerifying(false);
+        return;
+      }
+
       setIsVerifying(false);
       setIsVerified(true);
 
       // Brief celebration before completing authentication & action fulfillment
-      setTimeout(() => {
-        simulateSignIn(formattedPhone, fullName.trim() || undefined);
-        toast.success("Number verified! Welcome to TengaNow.");
+      setTimeout(async () => {
+        await loginWithToken(data.user, data.token);
+        toast.success(`Welcome back, ${data.user.full_name || "Customer"}!`);
         setStep("phone");
         setIsVerified(false);
       }, 700);
-    }, 600);
+    } catch (err) {
+      console.error("verify-otp error:", err);
+      toast.error("Verification failed. Please try again.");
+      setIsVerifying(false);
+    }
   };
 
   // Handle single digit changes
@@ -194,12 +241,36 @@ export function AuthModal() {
   };
 
   // Resend OTP
-  const handleResend = () => {
-    if (countdown > 0) return;
-    setCountdown(30);
-    setOtp(["", "", "", ""]);
-    otpInputs.current[0]?.focus();
-    toast.success("New 4-digit SMS OTP sent to " + formattedPhone);
+  const handleResend = async () => {
+    if (countdown > 0 || isSendingOtp) return;
+    setIsSendingOtp(true);
+    try {
+      const res = await fetch("/api/auth/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phoneNumber: formattedPhone,
+          fullName: fullName.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        toast.error(data.error || "Failed to resend code. Please try again.");
+        return;
+      }
+      setCountdown(30);
+      setOtp(["", "", "", ""]);
+      otpInputs.current[0]?.focus();
+      toast.success("New 4-digit OTP sent to " + formattedPhone);
+      if (data.debugCode) {
+        toast.info(`Test code: ${data.debugCode}`);
+      }
+    } catch (err) {
+      console.error("resend otp error:", err);
+      toast.error("Could not reach authentication service. Please try again.");
+    } finally {
+      setIsSendingOtp(false);
+    }
   };
 
   const handleSocialAuth = (provider: "Google" | "Apple") => {

@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { formatUsd } from "@/config/brand";
 import { productById, storeById, zoneById } from "@/data/catalog";
+import { DEFAULT_STAFF, subscribeToAdminOrders } from "@/lib/admin";
 import { useApp } from "@/lib/app-state";
 import {
   advanceStatus,
@@ -50,15 +51,52 @@ function JobDetail() {
   const { user } = useApp();
   const qc = useQueryClient();
 
-  const { data: staff } = useQuery({
+  const [demoStaffId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("tenganow.activeStaff") || "staff-farai-01";
+    }
+    return "staff-farai-01";
+  });
+
+  const { data: realStaff } = useQuery({
     queryKey: ["staff", "me", user?.id],
     queryFn: () => myStaffRecord(user!.id),
     enabled: Boolean(user),
   });
+
+  const staff = realStaff || DEFAULT_STAFF.find((s) => s.id === demoStaffId) || DEFAULT_STAFF[0];
+
   const { data: job, isLoading } = useQuery({
     queryKey: ["staff", "job", code],
     queryFn: () => getMyJob(code),
+    refetchInterval: 15000,
   });
+
+  const isOrderInDeliveryPhase =
+    job?.status === "Ready for collection" ||
+    job?.status === "Collected" ||
+    job?.status === "On the way" ||
+    job?.status === "Rider approaching" ||
+    job?.status === "Delivered";
+
+  const [activeView, setActiveView] = useState<"shopper" | "rider">(() =>
+    staff.role === "rider" || isOrderInDeliveryPhase ? "rider" : "shopper"
+  );
+
+  // Auto-switch to rider mode if order transitions to ready for collection
+  useEffect(() => {
+    if (isOrderInDeliveryPhase && activeView === "shopper" && staff.role === "rider") {
+      setActiveView("rider");
+    }
+  }, [isOrderInDeliveryPhase, activeView, staff.role]);
+
+  // Subscribe to live realtime order updates
+  useEffect(() => {
+    const unsub = subscribeToAdminOrders(() => {
+      void qc.invalidateQueries({ queryKey: ["staff"] });
+    });
+    return () => unsub();
+  }, [qc]);
 
   const refresh = () => void qc.invalidateQueries({ queryKey: ["staff"] });
 
@@ -67,7 +105,7 @@ function JobDetail() {
     return (
       <div>
         <p className="text-sm text-slate-secondary">
-          This job isn't assigned to you any more.
+          This job isn't found or has been completed.
         </p>
         <Link to="/staff" className="mt-3 inline-block text-sm font-semibold text-botanical">
           Back to my jobs
@@ -76,19 +114,52 @@ function JobDetail() {
     );
 
   const store = storeById(job.items[0]?.storeId ?? "tm-pnp");
-  const isRider = staff?.role === "rider";
+  const isRiderView = activeView === "rider";
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="type-card text-slate">Order {job.code}</h2>
-        <span className="rounded-full bg-mist px-2.5 py-1 text-xs font-semibold text-botanical">
-          {job.status}
-        </span>
+      {/* Top Bar with Status & Role View Switcher */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-3 shadow-2xs">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="type-card text-slate">Order {job.code}</h2>
+            <span className="rounded-full bg-botanical-tint px-2.5 py-0.5 text-xs font-semibold text-botanical">
+              {job.status}
+            </span>
+          </div>
+          <p className="mt-0.5 text-xs text-slate-muted">
+            PIN: <strong className="text-slate font-mono tracking-wider">{job.pin}</strong>
+            {job.pinVerified ? " (Verified ✓)" : ""}
+          </p>
+        </div>
+
+        {/* View Switcher Pill */}
+        <div className="flex items-center rounded-lg border border-border bg-mist/50 p-1 text-xs">
+          <button
+            onClick={() => setActiveView("shopper")}
+            className={`rounded-md px-3 py-1 font-semibold transition-colors ${
+              activeView === "shopper"
+                ? "bg-white text-botanical shadow-2xs"
+                : "text-slate-secondary hover:text-slate"
+            }`}
+          >
+            🛒 Shopper View
+          </button>
+          <button
+            onClick={() => setActiveView("rider")}
+            className={`rounded-md px-3 py-1 font-semibold transition-colors ${
+              activeView === "rider"
+                ? "bg-white text-botanical shadow-2xs"
+                : "text-slate-secondary hover:text-slate"
+            }`}
+          >
+            🛵 Rider View
+          </button>
+        </div>
       </div>
 
       {store ? (
-        <Card title={isRider ? "Collect from" : "Store"}>
+        <Card title={isRiderView ? "Collect from" : "Store"}>
           <p className="text-sm font-semibold text-slate">
             {store.name} — {store.pickup.branch}
           </p>
@@ -118,7 +189,7 @@ function JobDetail() {
         </Card>
       ) : null}
 
-      {isRider ? (
+      {isRiderView ? (
         <RiderPanel job={job} onDone={refresh} />
       ) : (
         <ShopperPanel job={job} onDone={refresh} />

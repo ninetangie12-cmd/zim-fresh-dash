@@ -39,4 +39,14 @@ export type Order = {
   recipientPhone?: string;
   hidePrices?: boolean;
   proofUploaded?: boolean;
+  paymentStatus?: string;
+  finalTotal?: number;
+  riderName?: string;
+  shopperName?: string;
+  statusHistory?: {
+    id?: string;
+    status: string;
+    note: string | null;
+    createdAt: string;
+  }[];
 };

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { Heart, Minus, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -20,12 +20,16 @@ export function ProductCard({ product }: { product: Product }) {
   const fallbackImg = imageFor(product.category);
   const [imgSrc, setImgSrc] = useState(product.image || fallbackImg);
 
+  useEffect(() => {
+    setImgSrc(product.image || fallbackImg);
+  }, [product.image, fallbackImg]);
+
   return (
     <article className="relative flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-botanical-mid">
       <Link
         to="/product/$slug"
         params={{ slug: product.slug }}
-        className="relative block aspect-square overflow-hidden bg-mist"
+        className="relative block aspect-square overflow-hidden bg-neutral-50/50 p-3 flex items-center justify-center dark:bg-slate-900/40"
       >
         <img
           src={imgSrc}
@@ -36,7 +40,7 @@ export function ProductCard({ product }: { product: Product }) {
           }}
           width={816}
           height={816}
-          className="size-full object-cover"
+          className="size-full object-contain object-center mix-blend-multiply transition-transform duration-300 group-hover:scale-105"
         />
         {product.promoLabel ? (
           <span className="type-eyebrow absolute left-2 top-2 rounded bg-coral px-1.5 py-0.5 text-white">

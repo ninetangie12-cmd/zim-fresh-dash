@@ -71,7 +71,7 @@ function Checkout() {
     if (submitting) return; // guards against duplicate orders
     if (!activeAddress) {
       toast.error("Add a delivery address first");
-      setStep(1);
+      setStep(0);
       return;
     }
     setSubmitting(true);
