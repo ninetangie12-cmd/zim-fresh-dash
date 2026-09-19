@@ -68,14 +68,14 @@ export function FreshProductCard({ product }: { product: Product }) {
       <Link
         to="/product/$slug"
         params={{ slug: product.slug }}
-        className="relative w-full aspect-square flex items-center justify-center p-4 bg-neutral-50/50 rounded-2xl overflow-hidden dark:bg-slate-900/40"
+        className="relative w-full aspect-square flex items-center justify-center p-2.5 sm:p-3.5 md:p-4 bg-neutral-50/60 rounded-2xl overflow-hidden dark:bg-slate-900/40"
       >
         <img
           src={imgSrc}
           alt={product.name}
           loading="lazy"
           onError={handleImageError}
-          className="w-full h-full max-h-36 object-contain object-center mix-blend-multiply transition-transform duration-300 group-hover:scale-105"
+          className="size-full max-h-[88%] object-contain object-center mix-blend-multiply transition-transform duration-300 group-hover:scale-105"
         />
 
         {/* Top-Left Floating Badge: Discount or Freshness */}
