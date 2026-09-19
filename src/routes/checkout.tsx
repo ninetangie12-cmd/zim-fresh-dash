@@ -1,6 +1,6 @@
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Check } from "lucide-react";
-import { useState } from "react";
+import { AlertCircle, Check } from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { EstimateNotice, IndependentNotice } from "@/components/site/Disclaimer";
@@ -16,6 +16,7 @@ import {
   type SubstitutionPreference,
 } from "@/data/catalog";
 import { useApp } from "@/lib/app-state";
+import { commitCartStock, reserveCartStock, type ShortageInfo } from "@/lib/inventory-client";
 
 export const Route = createFileRoute("/checkout")({
   head: () => ({
@@ -51,8 +52,27 @@ function Checkout() {
   const [hidePrices, setHidePrices] = useState(true);
   const [handover, setHandover] = useState("me");
   const [submitting, setSubmitting] = useState(false);
+  const [stockShortages, setStockShortages] = useState<ShortageInfo[]>([]);
 
   const hasLiquor = state.cart.some((i) => productById(i.productId)?.liquor);
+
+  // Reserve items for 15 minutes when user enters checkout
+  useEffect(() => {
+    if (!state.cart.length) return;
+    let isCurrent = true;
+    reserveCartStock(state.cart).then((res) => {
+      if (!isCurrent) return;
+      if (!res.success && res.shortages && res.shortages.length > 0) {
+        setStockShortages(res.shortages);
+        toast.warning("Some items in your basket exceed currently available stock.");
+      } else {
+        setStockShortages([]);
+      }
+    });
+    return () => {
+      isCurrent = false;
+    };
+  }, [state.cart]);
 
   if (!state.cart.length) {
     return (
@@ -76,6 +96,15 @@ function Checkout() {
     }
     setSubmitting(true);
     try {
+      // Re-validate and refresh reservation
+      const reserveRes = await reserveCartStock(state.cart);
+      if (!reserveRes.success && reserveRes.shortages && reserveRes.shortages.length > 0) {
+        setStockShortages(reserveRes.shortages);
+        toast.error("Some items are no longer available in the requested quantity.");
+        setSubmitting(false);
+        return;
+      }
+
       const order = await placeOrder({
         items: state.cart,
         addressId: activeAddress.id,
@@ -89,6 +118,12 @@ function Checkout() {
         ...(instructions ? { deliveryNotes: instructions } : {}),
         ...(forSomeoneElse ? { recipientName, recipientPhone } : {}),
       });
+
+      // If Cash On Delivery, commit reservation immediately
+      if (payment === "cod") {
+        void commitCartStock(state.cart);
+      }
+
       toast.success(`Order ${order.id} received`);
       // Anything other than cash on delivery needs payment and proof first.
       if (payment === "cod") {
@@ -104,6 +139,25 @@ function Checkout() {
 
   return (
     <Page title="Checkout" intro={`Step ${step + 1} of ${steps.length}: ${steps[step]}`} wide>
+      {stockShortages.length > 0 && (
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3.5 text-sm text-amber-900">
+          <AlertCircle className="mt-0.5 size-4 shrink-0 text-amber-600" />
+          <div className="space-y-1">
+            <p className="font-semibold">Stock shortage alert</p>
+            <p className="text-xs text-amber-800">
+              The following item{stockShortages.length > 1 ? "s exceed" : " exceeds"} currently available inventory:
+            </p>
+            <ul className="list-disc pl-4 text-xs font-medium">
+              {stockShortages.map((s) => (
+                <li key={s.product_id}>
+                  {s.name}: requested {s.requested}, only {s.available} available
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
       <ol className="mb-6 flex flex-wrap gap-1.5 text-xs">
         {steps.map((label, i) => (
           <li

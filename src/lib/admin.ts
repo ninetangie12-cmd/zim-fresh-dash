@@ -604,6 +604,26 @@ export async function decidePayment(
       amount: order.finalTotal ?? order.total,
       reason: reason ?? null,
     });
+
+    // Commit stock reservations permanently and deduct from stock_quantity on payment approval
+    if (approve) {
+      try {
+        const items = order.items?.map((it: any) => ({
+          product_id: it.productId || it.product_id || it.id,
+          quantity: it.quantity,
+        }));
+        await fetch("/api/cart/commit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: order.code,
+            items,
+          }),
+        });
+      } catch (commitErr) {
+        console.warn("Failed to commit stock reservation upon payment approval:", commitErr);
+      }
+    }
   } catch (err) {
     console.warn("Supabase decidePayment warning:", err);
   }

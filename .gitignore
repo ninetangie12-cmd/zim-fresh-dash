@@ -32,3 +32,4 @@ dist-ssr
 *.sw?
 scratch/
 .auth-store.json
+.inventory-store.json
