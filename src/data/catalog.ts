@@ -10,6 +10,7 @@ import productApples from "@/assets/product-apples.jpg";
 import productAvocados from "@/assets/product-avocados.jpg";
 import productBananas from "@/assets/product-bananas.jpg";
 import productSweetPotatoes from "@/assets/product-sweet-potatoes.jpg";
+import productPotatoes from "@/assets/product-potatoes.jpg";
 import productSpinach from "@/assets/product-spinach.jpg";
 import productMilk from "@/assets/product-milk.jpg";
 import productSourdough from "@/assets/product-sourdough.jpg";
@@ -524,7 +525,7 @@ export const products: Product[] = [
     synonyms: ["muriwo", "spinach"],
   }),
   p({ id: "fp-02", slug: "onions", name: "Onions", description: "Brown onions, sold loose by weight.", packSize: "per kg", price: 1.2, category: "fresh-produce", storeIds: ["tm-pnp", "daily-greens", "shop-for-me"], stock: "in_stock", weighted: true, pricePerKg: 1.2, estimatedKg: 1, synonyms: ["hanyanisi"] }),
-  p({ id: "fp-03", slug: "potatoes-pocket", name: "Potatoes", description: "Washed potatoes in a pocket.", packSize: "5 kg pocket", price: 4.8, category: "fresh-produce", storeIds: ["tm-pnp", "daily-greens"], stock: "in_stock", popular: true, image: "https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=600&q=80", synonyms: ["mbatatisi"] }),
+  p({ id: "fp-03", slug: "potatoes-pocket", name: "Potatoes", description: "Washed potatoes in a pocket.", packSize: "5 kg pocket", price: 4.8, category: "fresh-produce", storeIds: ["tm-pnp", "daily-greens"], stock: "in_stock", popular: true, image: productPotatoes, synonyms: ["mbatatisi"] }),
   p({ id: "fp-05", slug: "rape-bundle", name: "Rape (Covo)", description: "Fresh leafy greens, bundled.", packSize: "1 bundle", price: 0.6, category: "fresh-produce", storeIds: ["tm-pnp", "daily-greens", "shop-for-me"], stock: "in_stock", popular: true, synonyms: ["covo", "muriwo"] }),
   p({ id: "fp-06", slug: "butternut", name: "Butternut", description: "Whole butternut squash.", packSize: "each", price: 1.3, category: "fresh-produce", storeIds: ["tm-pnp", "daily-greens"], stock: "in_stock" }),
   p({ id: "fp-08", slug: "carrots", name: "Carrots", description: "Fresh carrots, sold by weight.", packSize: "per kg", price: 1.25, category: "fresh-produce", storeIds: ["tm-pnp", "daily-greens", "shop-for-me"], stock: "in_stock", weighted: true, pricePerKg: 1.25, estimatedKg: 1 }),
