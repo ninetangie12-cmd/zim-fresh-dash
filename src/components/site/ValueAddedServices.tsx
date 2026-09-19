@@ -170,8 +170,8 @@ export function ValueAddedServices() {
         </div>
       </div>
 
-      {/* Modern Scannable Card Grid: 2 cols mobile, 3 tablet, 6 desktop */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      {/* Modern Scannable Card Grid: 1 col mobile, 2 tablet, 3 desktop, 6 wide */}
+      <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
         {services.map((item) => {
           const Icon = item.icon;
 
