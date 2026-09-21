@@ -13,6 +13,10 @@ export type Address = {
   label: "Home" | "Work" | "Other";
   zoneId: string;
   line: string;
+  recipientName?: string;
+  recipientPhone?: string;
+  suburb?: string;
+  streetAddress?: string;
   landmark?: string;
   notes?: string;
 };
@@ -25,10 +29,13 @@ export type Order = {
   dbId?: string;
   placedAt: string;
   items: CartItem[];
+  storeId?: string;
   addressId: string;
   addressLine?: string;
   addressZoneId?: string;
   addressLandmark?: string;
+  suburb?: string;
+  streetAddress?: string;
   slotId: string;
   paymentMethod: string;
   status: string;

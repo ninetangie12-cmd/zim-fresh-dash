@@ -67,6 +67,8 @@ type OrderRow = {
   placed_at: string;
   payment_reference?: string | null;
   paynow_poll_url?: string | null;
+  suburb?: string | null;
+  street_address?: string | null;
   order_items?: Array<{
     product_id: string;
     store_id: string;
@@ -95,7 +97,9 @@ export function rowToOrder(row: OrderRow): Order {
     addressId: "",
     addressLine: row.address_line,
     addressZoneId: row.address_zone,
-    ...(row.address_landmark ? { addressLandmark: row.address_landmark } : {}),
+    addressLandmark: row.address_landmark ?? undefined,
+    suburb: row.suburb ?? undefined,
+    streetAddress: row.street_address ?? undefined,
     slotId: row.slot_id,
     paymentMethod: row.payment_method,
     paymentStatus: row.payment_status,
@@ -164,7 +168,7 @@ export async function saveList(userId: string, name: string, productIds: string[
 
 export async function saveProfilePrefs(
   userId: string,
-  prefs: { default_substitution?: string; age_verified?: boolean },
+  prefs: { default_substitution?: string; age_verified?: boolean; date_of_birth?: string; dob_verified?: boolean },
 ) {
   await supabase.from("profiles").upsert({ id: userId, ...prefs });
 }
@@ -203,10 +207,13 @@ export async function saveOrder(userId: string, input: NewOrderInput) {
       address_line: input.address.line,
       address_zone: input.address.zoneId,
       address_landmark: input.address.landmark ?? null,
+      suburb: input.address.suburb ?? null,
+      street_address: input.address.streetAddress ?? null,
+      landmark: input.address.landmark ?? null,
       delivery_notes: input.deliveryNotes ?? null,
       handover: input.handover ?? null,
-      recipient_name: input.recipientName ?? null,
-      recipient_phone: input.recipientPhone ?? null,
+      recipient_name: input.recipientName ?? input.address.recipientName ?? null,
+      recipient_phone: input.recipientPhone ?? input.address.recipientPhone ?? null,
       hide_prices: input.hidePrices,
       subtotal: input.subtotal,
       delivery_fee: input.deliveryFee,

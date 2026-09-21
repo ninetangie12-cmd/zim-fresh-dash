@@ -121,7 +121,13 @@ type Ctx = {
     user: { id: string; phone_number: string; full_name?: string | null; role: "customer" | "admin" },
     token: string,
   ) => Promise<void>;
-  addToCart: (productId: string, storeId: string, quantity?: number, options?: { openDrawer?: boolean }) => void;
+  addToCart: (productId: string, storeId: string, quantity?: number, options?: { openDrawer?: boolean; forceStoreSwitch?: boolean }) => void;
+  pendingStoreConflict: {
+    existingStoreId: string;
+    newStoreId: string;
+    pendingItem: { productId: string; quantity: number };
+  } | null;
+  resolveStoreConflict: (clearAndAdd: boolean) => void;
   setQuantity: (productId: string, quantity: number) => void;
   removeFromCart: (productId: string) => void;
   clearCart: () => void;
@@ -200,6 +206,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const openCart = useCallback(() => setIsCartOpen(true), []);
   const closeCart = useCallback(() => setIsCartOpen(false), []);
   const toggleCart = useCallback(() => setIsCartOpen((prev) => !prev), []);
+
+  // Multi-store conflict modal state
+  const [pendingStoreConflict, setPendingStoreConflict] = useState<{
+    existingStoreId: string;
+    newStoreId: string;
+    pendingItem: { productId: string; quantity: number };
+  } | null>(null);
 
   const simulateSignIn = useCallback((identifier: string, name?: string) => {
     const isEmail = identifier.includes("@");
@@ -475,28 +488,69 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   /* -------------------------------- basket -------------------------------- */
 
   const addToCart = useCallback(
-    (productId: string, storeId: string, quantity = 1, options?: { openDrawer?: boolean }) => {
-      const isFirstItem = stateRef.current.cart.length === 0;
+    (
+      productId: string,
+      storeId: string,
+      quantity = 1,
+      options?: { openDrawer?: boolean; forceStoreSwitch?: boolean },
+    ) => {
+      const currentCart = stateRef.current.cart;
+      const isFirstItem = currentCart.length === 0;
+
+      // 1. Check for multi-store conflict
+      if (!options?.forceStoreSwitch && currentCart.length > 0) {
+        const existingStoreId = currentCart.find((i) => Boolean(i.storeId))?.storeId;
+        if (existingStoreId && existingStoreId !== storeId) {
+          // Trigger modal prompt to clear cart and start with new store
+          setPendingStoreConflict({
+            existingStoreId,
+            newStoreId: storeId,
+            pendingItem: { productId, quantity },
+          });
+          return;
+        }
+      }
+
       update((s) => {
-        const existing = s.cart.find((i) => i.productId === productId);
+        // If switching stores forced, start fresh cart
+        const baseCart = options?.forceStoreSwitch ? [] : s.cart;
+        const existing = baseCart.find((i) => i.productId === productId);
         if (existing) {
           return {
             ...s,
-            cart: s.cart.map((i) =>
+            cart: baseCart.map((i) =>
               i.productId === productId ? { ...i, quantity: i.quantity + quantity } : i,
             ),
           };
         }
         return {
           ...s,
-          cart: [...s.cart, { productId, storeId, quantity, substitution: s.defaultSubstitution }],
+          cart: [...baseCart, { productId, storeId, quantity, substitution: s.defaultSubstitution }],
         };
       });
+
       if (options?.openDrawer ?? isFirstItem) {
         setIsCartOpen(true);
       }
     },
     [update],
+  );
+
+  const resolveStoreConflict = useCallback(
+    (clearAndAdd: boolean) => {
+      if (!pendingStoreConflict) return;
+      if (clearAndAdd) {
+        const { newStoreId, pendingItem } = pendingStoreConflict;
+        setPendingStoreConflict(null);
+        addToCart(pendingItem.productId, newStoreId, pendingItem.quantity, {
+          forceStoreSwitch: true,
+          openDrawer: true,
+        });
+      } else {
+        setPendingStoreConflict(null);
+      }
+    },
+    [pendingStoreConflict, addToCart],
   );
 
   const setQuantity = useCallback(
@@ -811,6 +865,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     simulateSignIn,
     loginWithToken,
     addToCart,
+    pendingStoreConflict,
+    resolveStoreConflict,
     setQuantity,
     removeFromCart,
     clearCart,

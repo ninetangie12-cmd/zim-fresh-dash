@@ -42,7 +42,7 @@ const steps = [
 
 function Checkout() {
   const navigate = useNavigate();
-  const { state, user, totals, placeOrder, setActiveAddress, setDefaultSubstitution, activeAddress } = useApp();
+  const { state, user, totals, placeOrder, setActiveAddress, setDefaultSubstitution, activeAddress, saveProfilePrefs } = useApp();
   const [step, setStep] = useState(0);
   const [slotId, setSlotId] = useState("asap");
   const [payment, setPayment] = useState<PaymentMethodId>("ecocash");
@@ -55,17 +55,85 @@ function Checkout() {
   const [submitting, setSubmitting] = useState(false);
   const [stockShortages, setStockShortages] = useState<ShortageInfo[]>([]);
 
+  // DOB Age Verification state
+  const [dob, setDob] = useState(user?.dateOfBirth || "");
+  const [dobConfirmed, setDobConfirmed] = useState(Boolean(user?.dobVerified));
+  const [dobError, setDobError] = useState("");
+
   // Paynow mobile & modal states
   const [mobileMoneyPhone, setMobileMoneyPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState(user?.email || "customer@tenganow.co.zw");
   const [paynowModalOpen, setPaynowModalOpen] = useState(false);
   const [paynowStatusText, setPaynowStatusText] = useState("");
   const [paynowOrderCode, setPaynowOrderCode] = useState("");
+  const [currentPollUrl, setCurrentPollUrl] = useState("");
   const [pollingActive, setPollingActive] = useState(false);
+  const [manualChecking, setManualChecking] = useState(false);
+  const [countdownSeconds, setCountdownSeconds] = useState(120);
 
   const hasLiquor = state.cart.some((i) => productById(i.productId)?.liquor);
   const isPaynowMethod = payment === "ecocash" || payment === "onemoney" || payment === "card";
   const isMobilePaynow = payment === "ecocash" || payment === "onemoney";
+
+  // Countdown timer for mobile PIN authorization
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    if (pollingActive && countdownSeconds > 0) {
+      timer = setInterval(() => {
+        setCountdownSeconds((prev) => {
+          if (prev <= 1) {
+            setPollingActive(false);
+            setPaynowStatusText("Payment prompt expired or timed out. You can re-verify or check your order tracking.");
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [pollingActive, countdownSeconds]);
+
+  // Helper to verify 18+
+  const isAdult = (dobString: string): boolean => {
+    if (!dobString) return false;
+    const birthDate = new Date(dobString);
+    if (isNaN(birthDate.getTime())) return false;
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age >= 18;
+  };
+
+  // Manual fallback check button handler
+  const handleManualStatusCheck = async () => {
+    if (!currentPollUrl && !paynowOrderCode) return;
+    setManualChecking(true);
+    try {
+      const pollRes = await pollPaynowStatus(currentPollUrl || paynowOrderCode);
+      if (pollRes.paid) {
+        setPollingActive(false);
+        void commitCartStock(state.cart);
+        toast.success("Payment confirmed! Redirecting to confirmation...");
+        setTimeout(() => {
+          navigate({
+            to: "/orders/confirmation",
+            search: { orderId: paynowOrderCode },
+          });
+        }, 800);
+      } else {
+        toast.info("Payment not confirmed yet. Please ensure your PIN was entered on your phone.");
+      }
+    } catch {
+      toast.error("Could not reach payment gateway. Please try again in a moment.");
+    } finally {
+      setManualChecking(false);
+    }
+  };
 
   // Reserve items for 15 minutes when user enters checkout
   useEffect(() => {
@@ -106,6 +174,19 @@ function Checkout() {
       return;
     }
 
+    // Liquor age verification check
+    if (hasLiquor) {
+      if (!isAdult(dob)) {
+        setDobError("You must be at least 18 years of age to order alcohol.");
+        toast.error("Age verification required: You must be 18 or older to purchase liquor.");
+        return;
+      }
+      // Persist DOB verification to user profile
+      if (user) {
+        saveProfilePrefs({ date_of_birth: dob, dob_verified: true });
+      }
+    }
+
     if (isMobilePaynow && !mobileMoneyPhone.trim()) {
       toast.error("Please enter your EcoCash / OneMoney mobile number in the payment step.");
       setStep(4);
@@ -127,10 +208,11 @@ function Checkout() {
       if (isPaynowMethod) {
         setPaynowStatusText(
           isMobilePaynow
-            ? `Sending payment request to ${mobileMoneyPhone}...`
+            ? `Payment prompt sent to ${mobileMoneyPhone}. Please enter your PIN on your phone.`
             : "Connecting to Paynow secure gateway..."
         );
         setPaynowModalOpen(true);
+        setCountdownSeconds(120);
 
         const initResult = await initiatePaynowPayment({
           items: state.cart.map((c) => ({
@@ -174,18 +256,20 @@ function Checkout() {
         });
 
         setPaynowOrderCode(initResult.orderCode || localOrder.id);
+        if (initResult.pollUrl) {
+          setCurrentPollUrl(initResult.pollUrl);
+        }
 
         if (isMobilePaynow) {
           // Show USSD pin instructions and start polling
           setPaynowStatusText(
-            initResult.instructions ||
-              `Check your phone (${mobileMoneyPhone}). A prompt has been sent. Enter your PIN to approve payment.`
+            `Payment prompt sent to ${mobileMoneyPhone}. Please enter your PIN on your phone.`
           );
           setPollingActive(true);
 
-          // Poll for up to 60 seconds
+          // Poll periodically
           let attempts = 0;
-          const maxAttempts = 20;
+          const maxAttempts = 40; // 40 * 3s = 120s
           const pollInterval = setInterval(async () => {
             attempts++;
             const pollRes = await pollPaynowStatus(initResult.pollUrl || initResult.orderCode || localOrder.id);
@@ -544,26 +628,74 @@ function Checkout() {
               <h2 className="type-card text-slate">Review and place your order</h2>
               <dl className="mt-3 space-y-2 text-sm">
                 <Line label="Address" value={activeAddress?.line ?? "Not set"} />
+                {activeAddress?.landmark ? <Line label="Landmark" value={activeAddress.landmark} /> : null}
                 <Line label="Delivery" value={deliverySlots.find((s) => s.id === slotId)?.label ?? ""} />
                 <Line label="Substitutions" value={substitutionOptions.find((o) => o.id === state.defaultSubstitution)?.label ?? ""} />
                 <Line label="Payment" value={paymentMethods.find((m) => m.id === payment)?.name ?? ""} />
                 <Line label="Instructions" value={instructions || "None"} />
                 {forSomeoneElse ? <Line label="Recipient" value={`${recipientName} · ${recipientPhone}`} /> : null}
               </dl>
+
+              {/* Age Compliance & Liquor Disclaimer */}
               {hasLiquor ? (
-                <p className="mt-3 rounded-md bg-warning-bg px-3 py-2 text-xs text-warning">
-                  This order contains alcohol. The recipient must be 18 or older and show
-                  identification. Unattended delivery is not permitted.
-                </p>
+                <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50/80 p-4 dark:border-amber-700/60 dark:bg-amber-950/30">
+                  <div className="flex items-start gap-2.5">
+                    <ShieldCheck className="size-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                    <div>
+                      <h3 className="text-sm font-bold text-amber-900 dark:text-amber-200">
+                        Age-Restricted Items (18+)
+                      </h3>
+                      <p className="mt-1 text-xs leading-relaxed text-amber-800 dark:text-amber-300 font-medium">
+                        Notice: This order contains alcohol. A valid national ID or driver's license matching the recipient must be presented upon physical delivery.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* DOB input & check */}
+                  <div className="mt-3.5 border-t border-amber-200/80 pt-3 dark:border-amber-800/50">
+                    <label className="block text-xs font-semibold text-amber-950 dark:text-amber-200">
+                      Date of Birth Verification (Must be 18 or older)
+                    </label>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-3">
+                      <input
+                        type="date"
+                        value={dob}
+                        max={new Date(Date.now() - 18 * 365.25 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}
+                        onChange={(e) => {
+                          setDob(e.target.value);
+                          setDobError("");
+                          if (isAdult(e.target.value)) {
+                            setDobConfirmed(true);
+                          } else {
+                            setDobConfirmed(false);
+                          }
+                        }}
+                        className="rounded-lg border border-amber-300 bg-card px-3 py-1.5 text-sm font-medium focus:border-amber-500 focus:outline-none dark:border-amber-700"
+                        required
+                      />
+                      {dob && isAdult(dob) && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                          <Check className="size-3.5" />
+                          Age Verified (18+)
+                        </span>
+                      )}
+                    </div>
+                    {dobError && <p className="mt-1.5 text-xs font-semibold text-rose-600">{dobError}</p>}
+                    <p className="mt-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+                      We securely record this verification against your profile to comply with liquor licensing regulations.
+                    </p>
+                  </div>
+                </div>
               ) : null}
+
               <IndependentNotice className="mt-3" />
                <button
                 type="button"
                 onClick={submit}
-                disabled={submitting}
+                disabled={submitting || (hasLiquor && !isAdult(dob))}
                  className="mt-4 min-h-12 w-full rounded-xl bg-coral px-4 text-[15px] font-bold text-primary-foreground hover:bg-coral-hover disabled:opacity-60"
               >
-                {submitting ? "Placing your order…" : "Place order"}
+                {submitting ? "Placing your order…" : `Place order · USD ${formatUsd(totals.total)}`}
               </button>
             </div>
           ) : null}
@@ -600,8 +732,9 @@ function Checkout() {
             </div>
             <div className="mt-2 flex justify-between border-t border-border pt-2 type-card text-slate">
               <span>Estimated total</span>
-              <span>{formatUsd(totals.total)}</span>
+              <span className="font-bold text-botanical">USD {formatUsd(totals.total)}</span>
             </div>
+            <p className="mt-1 text-[11px] text-slate-muted">All prices and payments denominated in USD</p>
             <EstimateNotice className="mt-3" />
           </div>
         </aside>
@@ -624,23 +757,54 @@ function Checkout() {
                 {pollingActive ? "Awaiting PIN Authorization" : "Initiating Paynow Gateway"}
               </h3>
 
+              {/* Amount clearly displayed in USD */}
+              <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300">
+                <span>Amount: USD {formatUsd(totals.total)}</span>
+              </div>
+
               <p className="mt-2 text-sm text-slate-secondary">
                 {paynowStatusText || "Connecting to secure payment gateway..."}
               </p>
 
               {pollingActive && (
-                <div className="mt-4 w-full rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5 text-xs text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300 text-left space-y-1.5">
-                  <p className="font-semibold flex items-center gap-1.5">
-                    <span className="size-2 rounded-full bg-emerald-500 animate-ping" />
-                    Live USSD prompt active
-                  </p>
+                <div className="mt-4 w-full rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-xs text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300 text-left space-y-2">
+                  <div className="flex items-center justify-between font-semibold">
+                    <span className="flex items-center gap-1.5">
+                      <span className="size-2 rounded-full bg-emerald-500 animate-ping" />
+                      Live USSD prompt active
+                    </span>
+                    <span className="rounded bg-emerald-200/80 px-2 py-0.5 font-mono text-emerald-900 dark:bg-emerald-900/80 dark:text-emerald-200">
+                      {Math.floor(countdownSeconds / 60)}:{(countdownSeconds % 60).toString().padStart(2, "0")} remaining
+                    </span>
+                  </div>
                   <p>1. Check phone <strong>{mobileMoneyPhone}</strong>.</p>
-                  <p>2. Enter your PIN on the pop-up prompt to confirm payment of <strong>{formatUsd(totals.total)}</strong>.</p>
+                  <p>2. Enter your PIN on the pop-up prompt to confirm payment of <strong>USD {formatUsd(totals.total)}</strong>.</p>
                   <p>3. Do not close this screen. Your payment will automatically confirm here once approved.</p>
                 </div>
               )}
 
-              <div className="mt-6 flex w-full gap-3">
+              {/* Manual fallback status check button */}
+              {pollingActive && (
+                <div className="mt-4 w-full">
+                  <button
+                    type="button"
+                    onClick={handleManualStatusCheck}
+                    disabled={manualChecking}
+                    className="w-full rounded-xl bg-botanical py-2.5 text-sm font-bold text-white shadow-xs hover:bg-botanical-hover disabled:opacity-60 transition-all flex items-center justify-center gap-2"
+                  >
+                    {manualChecking ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin" />
+                        <span>Verifying with Paynow...</span>
+                      </>
+                    ) : (
+                      <span>I have entered my PIN, verify status now</span>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              <div className="mt-4 flex w-full gap-3">
                 <button
                   type="button"
                   onClick={() => {

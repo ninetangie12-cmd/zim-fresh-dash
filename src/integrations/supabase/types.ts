@@ -413,7 +413,9 @@ export type Database = {
         Row: {
           age_verified: boolean
           created_at: string
+          date_of_birth: string | null
           default_substitution: string
+          dob_verified: boolean | null
           full_name: string | null
           id: string
           phone: string | null
@@ -422,7 +424,9 @@ export type Database = {
         Insert: {
           age_verified?: boolean
           created_at?: string
+          date_of_birth?: string | null
           default_substitution?: string
+          dob_verified?: boolean | null
           full_name?: string | null
           id: string
           phone?: string | null
@@ -431,7 +435,9 @@ export type Database = {
         Update: {
           age_verified?: boolean
           created_at?: string
+          date_of_birth?: string | null
           default_substitution?: string
+          dob_verified?: boolean | null
           full_name?: string | null
           id?: string
           phone?: string | null

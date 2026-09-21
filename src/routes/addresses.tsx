@@ -136,21 +136,22 @@ function Addresses() {
             value={line}
             onChange={(e) => setLine(e.target.value)}
             maxLength={120}
-            placeholder="Street address, suburb"
+            placeholder="Street address or stand number (e.g. 42 Samora Machel Ave / Stand 104)"
             className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+            required
           />
           <input
             value={landmark}
             onChange={(e) => setLandmark(e.target.value)}
             maxLength={120}
-            placeholder="Nearest landmark (e.g. opposite the clinic)"
+            placeholder="Nearest landmark or cross street (crucial for riders)"
             className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
           />
           <input
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             maxLength={200}
-            placeholder="Delivery notes (gate colour, dogs, who to call)"
+            placeholder="Delivery notes (gate code, gate colour, dogs, call instructions)"
             className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
           />
 

@@ -34,6 +34,7 @@ import { Route as AdminRequestsRouteImport } from './routes/admin.requests'
 import { Route as AdminStaffRouteImport } from './routes/admin.staff'
 import { Route as CategorySlugRouteImport } from './routes/category.$slug'
 import { Route as OrderIdRouteImport } from './routes/order.$id'
+import { Route as OrdersIdRouteImport } from './routes/orders.$id'
 import { Route as OrdersConfirmationRouteImport } from './routes/orders.confirmation'
 import { Route as PaymentIdRouteImport } from './routes/payment.$id'
 import { Route as ProductSlugRouteImport } from './routes/product.$slug'
@@ -169,6 +170,11 @@ const OrderIdRoute = OrderIdRouteImport.update({
   path: '/order/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OrdersIdRoute = OrdersIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => OrdersRoute,
+} as any)
 const OrdersConfirmationRoute = OrdersConfirmationRouteImport.update({
   id: '/confirmation',
   path: '/confirmation',
@@ -240,6 +246,7 @@ export interface FileRoutesByFullPath {
   '/admin/staff': typeof AdminStaffRoute
   '/category/$slug': typeof CategorySlugRoute
   '/order/$id': typeof OrderIdRoute
+  '/orders/$id': typeof OrdersIdRoute
   '/orders/confirmation': typeof OrdersConfirmationRoute
   '/payment/$id': typeof PaymentIdRoute
   '/product/$slug': typeof ProductSlugRoute
@@ -274,6 +281,7 @@ export interface FileRoutesByTo {
   '/admin/staff': typeof AdminStaffRoute
   '/category/$slug': typeof CategorySlugRoute
   '/order/$id': typeof OrderIdRoute
+  '/orders/$id': typeof OrdersIdRoute
   '/orders/confirmation': typeof OrdersConfirmationRoute
   '/payment/$id': typeof PaymentIdRoute
   '/product/$slug': typeof ProductSlugRoute
@@ -311,6 +319,7 @@ export interface FileRoutesById {
   '/admin/staff': typeof AdminStaffRoute
   '/category/$slug': typeof CategorySlugRoute
   '/order/$id': typeof OrderIdRoute
+  '/orders/$id': typeof OrdersIdRoute
   '/orders/confirmation': typeof OrdersConfirmationRoute
   '/payment/$id': typeof PaymentIdRoute
   '/product/$slug': typeof ProductSlugRoute
@@ -349,6 +358,7 @@ export interface FileRouteTypes {
     | '/admin/staff'
     | '/category/$slug'
     | '/order/$id'
+    | '/orders/$id'
     | '/orders/confirmation'
     | '/payment/$id'
     | '/product/$slug'
@@ -383,6 +393,7 @@ export interface FileRouteTypes {
     | '/admin/staff'
     | '/category/$slug'
     | '/order/$id'
+    | '/orders/$id'
     | '/orders/confirmation'
     | '/payment/$id'
     | '/product/$slug'
@@ -419,6 +430,7 @@ export interface FileRouteTypes {
     | '/admin/staff'
     | '/category/$slug'
     | '/order/$id'
+    | '/orders/$id'
     | '/orders/confirmation'
     | '/payment/$id'
     | '/product/$slug'
@@ -637,6 +649,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrderIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/orders/$id': {
+      id: '/orders/$id'
+      path: '/$id'
+      fullPath: '/orders/$id'
+      preLoaderRoute: typeof OrdersIdRouteImport
+      parentRoute: typeof OrdersRoute
+    }
     '/orders/confirmation': {
       id: '/orders/confirmation'
       path: '/confirmation'
@@ -722,10 +741,12 @@ const AdminRouteChildren: AdminRouteChildren = {
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 interface OrdersRouteChildren {
+  OrdersIdRoute: typeof OrdersIdRoute
   OrdersConfirmationRoute: typeof OrdersConfirmationRoute
 }
 
 const OrdersRouteChildren: OrdersRouteChildren = {
+  OrdersIdRoute: OrdersIdRoute,
   OrdersConfirmationRoute: OrdersConfirmationRoute,
 }
 

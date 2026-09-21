@@ -19,6 +19,7 @@ import { brand } from "@/config/brand";
 import { AppStateProvider } from "@/lib/app-state";
 import { AuthModal } from "@/components/site/AuthModal";
 import { CartDrawer } from "@/components/site/CartDrawer";
+import { MultiStoreCartModal } from "@/components/site/MultiStoreCartModal";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
@@ -145,6 +146,7 @@ function RootComponent() {
           <Toaster position="top-center" />
           <AuthModal />
           <CartDrawer />
+          <MultiStoreCartModal />
         </div>
       </AppStateProvider>
     </QueryClientProvider>
