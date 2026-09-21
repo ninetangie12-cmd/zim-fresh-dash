@@ -212,6 +212,8 @@ export type Database = {
           id_checked: boolean | null
           payment_method: string
           payment_status: string
+          payment_reference: string | null
+          paynow_poll_url: string | null
           pin: string
           pin_verified: boolean
           placed_at: string
@@ -248,6 +250,8 @@ export type Database = {
           id_checked?: boolean | null
           payment_method: string
           payment_status?: string
+          payment_reference?: string | null
+          paynow_poll_url?: string | null
           pin: string
           pin_verified?: boolean
           placed_at?: string
@@ -284,6 +288,8 @@ export type Database = {
           id_checked?: boolean | null
           payment_method?: string
           payment_status?: string
+          payment_reference?: string | null
+          paynow_poll_url?: string | null
           pin?: string
           pin_verified?: boolean
           placed_at?: string

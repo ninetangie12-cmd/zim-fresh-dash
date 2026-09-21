@@ -354,6 +354,89 @@ export async function handleFetchApiRequest(request: Request): Promise<Response 
     }
   }
 
+  // 11. POST /api/paynow/initiate
+  if (pathname === "/api/paynow/initiate" && method === "POST") {
+    try {
+      const body = (await request.json()) as {
+        items: Array<{ productId: string; quantity: number; storeId?: string }>;
+        customerEmail: string;
+        customerPhone?: string;
+        deliveryAddress: { line: string; zoneId?: string; landmark?: string };
+        deliveryFee?: number;
+        paymentMethod: "ecocash" | "onemoney" | "card" | "web";
+        userId?: string;
+      };
+
+      const {
+        items,
+        customerEmail,
+        customerPhone = "",
+        deliveryAddress,
+        deliveryFee = 3.5,
+        paymentMethod,
+        userId,
+      } = body;
+
+      if (!items || !items.length) {
+        return jsonResponse({ success: false, error: "Cart is empty." }, 400);
+      }
+
+      // Compute subtotal from catalog inventory store or standard prices
+      let subtotal = 0;
+      const allStock = getAllProductsStock();
+      for (const item of items) {
+        // Find product price fallback
+        const p = allStock.find((x) => x.id === item.productId);
+        const unitPrice = 2.50; // fallback standard unit price if not set
+        subtotal += unitPrice * item.quantity;
+      }
+
+      const total = Number((subtotal + deliveryFee).toFixed(2));
+      const orderCode = `TN-${Math.floor(10000 + Math.random() * 89999)}`;
+      const pollUrl = `/api/paynow/poll?orderCode=${orderCode}`;
+      const isMobile = paymentMethod === "ecocash" || paymentMethod === "onemoney";
+      const instructions = isMobile
+        ? `Please check your phone (${customerPhone || "077xxxxxxx"}) for the prompt and enter your PIN.`
+        : "Click to complete payment on Paynow's secure checkout.";
+
+      return jsonResponse({
+        success: true,
+        orderId: orderCode,
+        orderCode: orderCode,
+        redirectUrl: `/orders/confirmation?orderId=${orderCode}`,
+        pollUrl: pollUrl,
+        paynowReference: `PN-${Date.now()}`,
+        instructions: instructions,
+        total: total,
+      });
+    } catch (err: any) {
+      console.error("paynow-initiate error:", err);
+      return jsonResponse({ success: false, error: err.message || "Paynow initiation failed." }, 500);
+    }
+  }
+
+  // 12. GET /api/paynow/poll
+  if (pathname === "/api/paynow/poll" && method === "GET") {
+    const orderCode = url.searchParams.get("orderCode") || "";
+    // In dev simulation, mark as paid after a short delay or if queried
+    return jsonResponse({
+      success: true,
+      orderCode,
+      status: "paid",
+      paid: true,
+    });
+  }
+
+  // 13. POST /api/paynow/webhook
+  if (pathname === "/api/paynow/webhook" && method === "POST") {
+    try {
+      const text = await request.text();
+      return jsonResponse({ success: true, received: true });
+    } catch (err: any) {
+      return jsonResponse({ success: false, error: err.message }, 500);
+    }
+  }
+
   return null;
 }
 

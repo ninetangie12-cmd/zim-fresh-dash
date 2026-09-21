@@ -140,7 +140,8 @@ function OrderPage() {
   }, 0);
 
   const method = paymentMethods.find((m) => m.id === order.paymentMethod);
-  const needsProof = order.paymentMethod !== "cod" && !order.proofUploaded;
+  const isPaid = order.paymentStatus === "paid" || order.status === "Payment approved" || order.status === "Confirmed";
+  const needsProof = order.paymentMethod !== "cod" && !isPaid && !order.proofUploaded;
 
   const copyPin = () => {
     void navigator.clipboard.writeText(order.pin);

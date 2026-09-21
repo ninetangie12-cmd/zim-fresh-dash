@@ -1,5 +1,5 @@
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { AlertCircle, Check } from "lucide-react";
+import { AlertCircle, Check, Loader2, Phone, ShieldCheck, Smartphone } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -17,6 +17,7 @@ import {
 } from "@/data/catalog";
 import { useApp } from "@/lib/app-state";
 import { commitCartStock, reserveCartStock, type ShortageInfo } from "@/lib/inventory-client";
+import { initiatePaynowPayment, pollPaynowStatus } from "@/lib/paynow-client";
 
 export const Route = createFileRoute("/checkout")({
   head: () => ({
@@ -41,7 +42,7 @@ const steps = [
 
 function Checkout() {
   const navigate = useNavigate();
-  const { state, totals, placeOrder, setActiveAddress, setDefaultSubstitution, activeAddress } = useApp();
+  const { state, user, totals, placeOrder, setActiveAddress, setDefaultSubstitution, activeAddress } = useApp();
   const [step, setStep] = useState(0);
   const [slotId, setSlotId] = useState("asap");
   const [payment, setPayment] = useState<PaymentMethodId>("ecocash");
@@ -54,7 +55,17 @@ function Checkout() {
   const [submitting, setSubmitting] = useState(false);
   const [stockShortages, setStockShortages] = useState<ShortageInfo[]>([]);
 
+  // Paynow mobile & modal states
+  const [mobileMoneyPhone, setMobileMoneyPhone] = useState("");
+  const [customerEmail, setCustomerEmail] = useState(user?.email || "customer@tenganow.co.zw");
+  const [paynowModalOpen, setPaynowModalOpen] = useState(false);
+  const [paynowStatusText, setPaynowStatusText] = useState("");
+  const [paynowOrderCode, setPaynowOrderCode] = useState("");
+  const [pollingActive, setPollingActive] = useState(false);
+
   const hasLiquor = state.cart.some((i) => productById(i.productId)?.liquor);
+  const isPaynowMethod = payment === "ecocash" || payment === "onemoney" || payment === "card";
+  const isMobilePaynow = payment === "ecocash" || payment === "onemoney";
 
   // Reserve items for 15 minutes when user enters checkout
   useEffect(() => {
@@ -94,9 +105,16 @@ function Checkout() {
       setStep(0);
       return;
     }
+
+    if (isMobilePaynow && !mobileMoneyPhone.trim()) {
+      toast.error("Please enter your EcoCash / OneMoney mobile number in the payment step.");
+      setStep(4);
+      return;
+    }
+
     setSubmitting(true);
     try {
-      // Re-validate and refresh reservation
+      // 1. Re-validate inventory reservation
       const reserveRes = await reserveCartStock(state.cart);
       if (!reserveRes.success && reserveRes.shortages && reserveRes.shortages.length > 0) {
         setStockShortages(reserveRes.shortages);
@@ -105,6 +123,106 @@ function Checkout() {
         return;
       }
 
+      // 2. Handle Paynow payment flow
+      if (isPaynowMethod) {
+        setPaynowStatusText(
+          isMobilePaynow
+            ? `Sending payment request to ${mobileMoneyPhone}...`
+            : "Connecting to Paynow secure gateway..."
+        );
+        setPaynowModalOpen(true);
+
+        const initResult = await initiatePaynowPayment({
+          items: state.cart.map((c) => ({
+            productId: c.productId,
+            storeId: c.storeId,
+            quantity: c.quantity,
+          })),
+          customerEmail: customerEmail || "customer@tenganow.co.zw",
+          customerPhone: isMobilePaynow ? mobileMoneyPhone : undefined,
+          deliveryAddress: {
+            line: activeAddress.line,
+            zoneId: activeAddress.zoneId,
+            landmark: activeAddress.landmark,
+          },
+          deliveryFee: totals.deliveryFee,
+          paymentMethod: payment as any,
+          deliveryNotes: instructions,
+          userId: user?.id,
+        });
+
+        if (!initResult.success) {
+          setSubmitting(false);
+          setPaynowModalOpen(false);
+          toast.error(initResult.error || "Failed to initiate payment with Paynow.");
+          return;
+        }
+
+        // Also save order in local state for seamless client-side viewing
+        const localOrder = await placeOrder({
+          items: state.cart,
+          addressId: activeAddress.id,
+          slotId,
+          paymentMethod: payment,
+          status: "Awaiting payment",
+          total: totals.total,
+          deliveryFee: totals.deliveryFee,
+          hidePrices: forSomeoneElse ? hidePrices : false,
+          handover,
+          ...(instructions ? { deliveryNotes: instructions } : {}),
+          ...(forSomeoneElse ? { recipientName, recipientPhone } : {}),
+        });
+
+        setPaynowOrderCode(initResult.orderCode || localOrder.id);
+
+        if (isMobilePaynow) {
+          // Show USSD pin instructions and start polling
+          setPaynowStatusText(
+            initResult.instructions ||
+              `Check your phone (${mobileMoneyPhone}). A prompt has been sent. Enter your PIN to approve payment.`
+          );
+          setPollingActive(true);
+
+          // Poll for up to 60 seconds
+          let attempts = 0;
+          const maxAttempts = 20;
+          const pollInterval = setInterval(async () => {
+            attempts++;
+            const pollRes = await pollPaynowStatus(initResult.pollUrl || initResult.orderCode || localOrder.id);
+            if (pollRes.paid) {
+              clearInterval(pollInterval);
+              setPollingActive(false);
+              void commitCartStock(state.cart);
+              toast.success("Payment confirmed! Redirecting to confirmation...");
+              setTimeout(() => {
+                navigate({
+                  to: "/orders/confirmation",
+                  search: { orderId: initResult.orderCode || localOrder.id },
+                });
+              }, 1200);
+            } else if (attempts >= maxAttempts) {
+              clearInterval(pollInterval);
+              setPollingActive(false);
+              setPaynowStatusText("Waiting for payment. You can also track your order in your account.");
+            }
+          }, 3000);
+          return;
+        } else {
+          // Card / Web redirect
+          if (initResult.redirectUrl && initResult.redirectUrl.startsWith("http")) {
+            window.location.href = initResult.redirectUrl;
+            return;
+          } else {
+            navigate({
+              to: "/orders/confirmation",
+              search: { orderId: initResult.orderCode || localOrder.id },
+            });
+            return;
+          }
+        }
+      }
+
+      // 3. Fallback for COD / Manual Bank Transfer
       const order = await placeOrder({
         items: state.cart,
         addressId: activeAddress.id,
@@ -119,21 +237,18 @@ function Checkout() {
         ...(forSomeoneElse ? { recipientName, recipientPhone } : {}),
       });
 
-      // If Cash On Delivery, commit reservation immediately
       if (payment === "cod") {
         void commitCartStock(state.cart);
-      }
-
-      toast.success(`Order ${order.id} received`);
-      // Anything other than cash on delivery needs payment and proof first.
-      if (payment === "cod") {
+        toast.success(`Order ${order.id} received`);
         navigate({ to: "/order/$id", params: { id: order.id } });
       } else {
+        toast.success(`Order ${order.id} placed`);
         navigate({ to: "/payment/$id", params: { id: order.id } });
       }
-    } catch {
+    } catch (err: any) {
       setSubmitting(false);
-      toast.error("We couldn't place your order. Please try again.");
+      setPaynowModalOpen(false);
+      toast.error(err?.message || "We couldn't place your order. Please try again.");
     }
   };
 
@@ -357,12 +472,12 @@ function Checkout() {
 
            {step === 4 ? (
             <div>
-              <h2 className="type-card text-slate">Choose payment</h2>
+              <h2 className="type-card text-slate">Choose payment method</h2>
               <div className="mt-3 space-y-2">
                 {paymentMethods.map((m) => (
                   <label
                     key={m.id}
-                    className={`flex cursor-pointer gap-3 rounded-md border p-3 text-sm ${
+                    className={`flex cursor-pointer gap-3 rounded-md border p-3 text-sm transition-colors ${
                       payment === m.id ? "border-botanical bg-botanical-tint" : "border-border"
                     }`}
                   >
@@ -374,10 +489,53 @@ function Checkout() {
                   </label>
                 ))}
               </div>
-              <p className="mt-3 rounded-md bg-info-bg px-3 py-2 text-xs text-info">
-                Your order is only marked as paid once an administrator approves your payment. For
-                cash on delivery, have the exact amount ready.
-              </p>
+
+              {/* EcoCash / OneMoney mobile phone input prompt */}
+              {isMobilePaynow && (
+                <div className="mt-4 rounded-xl border border-emerald-300 bg-emerald-50/70 p-4 dark:bg-emerald-950/20">
+                  <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 font-semibold text-sm">
+                    <Smartphone className="size-4 text-emerald-600" />
+                    <span>Mobile Money Number</span>
+                  </div>
+                  <p className="mt-1 text-xs text-emerald-700/90 dark:text-emerald-400">
+                    A USSD prompt will be sent immediately to this phone to enter your PIN.
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    <label className="block text-xs font-medium text-slate">
+                      {payment === "ecocash" ? "EcoCash" : "OneMoney"} Phone Number (077 / 078 / 071)
+                    </label>
+                    <input
+                      type="tel"
+                      value={mobileMoneyPhone}
+                      onChange={(e) => setMobileMoneyPhone(e.target.value)}
+                      placeholder="e.g. 0771234567"
+                      maxLength={15}
+                      className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium focus:border-botanical focus:outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Email address for receipts */}
+              <div className="mt-4">
+                <label className="block text-xs font-medium text-slate">Email Address for Receipt & Paynow Confirmation</label>
+                <input
+                  type="email"
+                  value={customerEmail}
+                  onChange={(e) => setCustomerEmail(e.target.value)}
+                  placeholder="your.email@example.com"
+                  className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:border-botanical focus:outline-none"
+                />
+              </div>
+
+              <div className="mt-3 flex items-center gap-2 rounded-md bg-info-bg px-3 py-2 text-xs text-info">
+                <ShieldCheck className="size-4 shrink-0" />
+                <span>
+                  {isPaynowMethod
+                    ? "Secured by Paynow gateway. Transactions are encrypted and verified in real time."
+                    : "For cash on delivery, please have the exact amount ready for the rider upon delivery."}
+                </span>
+              </div>
             </div>
           ) : null}
 
@@ -448,6 +606,60 @@ function Checkout() {
           </div>
         </aside>
       </div>
+
+      {/* Paynow Processing & Live Polling Modal */}
+      {paynowModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex flex-col items-center text-center">
+              <div className="grid size-14 place-items-center rounded-full bg-emerald-100 dark:bg-emerald-950/60">
+                {pollingActive ? (
+                  <Smartphone className="size-7 text-emerald-600 animate-bounce" />
+                ) : (
+                  <Loader2 className="size-7 text-emerald-600 animate-spin" />
+                )}
+              </div>
+
+              <h3 className="mt-4 font-heading text-lg font-bold text-slate">
+                {pollingActive ? "Awaiting PIN Authorization" : "Initiating Paynow Gateway"}
+              </h3>
+
+              <p className="mt-2 text-sm text-slate-secondary">
+                {paynowStatusText || "Connecting to secure payment gateway..."}
+              </p>
+
+              {pollingActive && (
+                <div className="mt-4 w-full rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5 text-xs text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300 text-left space-y-1.5">
+                  <p className="font-semibold flex items-center gap-1.5">
+                    <span className="size-2 rounded-full bg-emerald-500 animate-ping" />
+                    Live USSD prompt active
+                  </p>
+                  <p>1. Check phone <strong>{mobileMoneyPhone}</strong>.</p>
+                  <p>2. Enter your PIN on the pop-up prompt to confirm payment of <strong>{formatUsd(totals.total)}</strong>.</p>
+                  <p>3. Do not close this screen. Your payment will automatically confirm here once approved.</p>
+                </div>
+              )}
+
+              <div className="mt-6 flex w-full gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaynowModalOpen(false);
+                    setPollingActive(false);
+                    setSubmitting(false);
+                    if (paynowOrderCode) {
+                      navigate({ to: "/order/$id", params: { id: paynowOrderCode } });
+                    }
+                  }}
+                  className="w-full rounded-xl border border-border py-2.5 text-sm font-semibold text-slate hover:bg-mist transition-colors"
+                >
+                  {pollingActive ? "I'll track order later" : "Cancel"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </Page>
   );
 }

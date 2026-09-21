@@ -65,6 +65,8 @@ type OrderRow = {
   final_total?: string | number | null;
   pin: string;
   placed_at: string;
+  payment_reference?: string | null;
+  paynow_poll_url?: string | null;
   order_items?: Array<{
     product_id: string;
     store_id: string;
@@ -97,13 +99,15 @@ export function rowToOrder(row: OrderRow): Order {
     slotId: row.slot_id,
     paymentMethod: row.payment_method,
     paymentStatus: row.payment_status,
+    ...(row.payment_reference ? { paymentReference: row.payment_reference } : {}),
+    ...(row.paynow_poll_url ? { paynowPollUrl: row.paynow_poll_url } : {}),
     status: row.status,
     total: Number(row.total),
     deliveryFee: Number(row.delivery_fee),
     ...(row.final_total != null ? { finalTotal: Number(row.final_total) } : {}),
     pin: row.pin,
     hidePrices: row.hide_prices,
-    proofUploaded: row.payment_status !== "awaiting",
+    proofUploaded: row.payment_status !== "awaiting" && row.payment_status !== "pending",
     ...(row.recipient_name ? { recipientName: row.recipient_name } : {}),
     ...(row.recipient_phone ? { recipientPhone: row.recipient_phone } : {}),
     statusHistory: (row.order_status_history ?? [])

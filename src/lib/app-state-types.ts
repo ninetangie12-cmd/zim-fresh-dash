@@ -40,6 +40,8 @@ export type Order = {
   hidePrices?: boolean;
   proofUploaded?: boolean;
   paymentStatus?: string;
+  paymentReference?: string;
+  paynowPollUrl?: string;
   finalTotal?: number;
   riderName?: string;
   shopperName?: string;

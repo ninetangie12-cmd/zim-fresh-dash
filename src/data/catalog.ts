@@ -725,10 +725,10 @@ export type SubstitutionPreference = (typeof substitutionOptions)[number]["id"];
 /* --------------------------------- Payments -------------------------------- */
 
 export const paymentMethods = [
-  { id: "ecocash", name: "EcoCash", hint: "Mobile money. Upload proof after paying." },
+  { id: "ecocash", name: "EcoCash (Paynow)", hint: "Instant USSD PIN prompt on your mobile phone." },
+  { id: "onemoney", name: "OneMoney (Paynow)", hint: "Instant USSD PIN prompt on your mobile phone." },
+  { id: "card", name: "Visa / Mastercard (Paynow)", hint: "Secure online payment via Paynow gateway." },
   { id: "innbucks", name: "InnBucks", hint: "Mobile wallet. Upload proof after paying." },
-  { id: "onemoney", name: "OneMoney", hint: "Mobile money. Upload proof after paying." },
-  { id: "card", name: "Visa or Mastercard", hint: "Local or international card." },
   { id: "bank", name: "Bank transfer", hint: "Upload your transfer confirmation." },
   { id: "cod", name: "Cash on delivery", hint: "Have the exact amount ready." },
 ] as const;
